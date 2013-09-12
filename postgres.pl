@@ -6,6 +6,8 @@ use File::Basename;
 use strict;
 
 # Ces 3 sont en our pour pouvoir les manipuler par référence symbolique (paresse quand tu nous tiens)
+# Ça évite de stocker dans un hash, ou de devoir faire une floppée de if dans la fonction
+# de chargement de la conf
 our $parallelisme;
 our $work_dir;
 our $git_local_repo;
