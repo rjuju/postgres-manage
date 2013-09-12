@@ -5,9 +5,12 @@ use File::Basename;
 
 use strict;
 
-my $parallelisme=6;
-my $work_dir='/home/marc/postgres';
-my $git_local_repo="/home/marc/postgres/postgresql-git";
+# Ces 3 sont en our pour pouvoir les manipuler par référence symbolique (paresse quand tu nous tiens)
+our $parallelisme;
+our $work_dir;
+our $git_local_repo;
+
+my $conf_file;
 
 my $version;
 my $mode;
@@ -397,8 +400,64 @@ sub git_update
 	system_or_die ("cd ${git_local_repo} && git pull");
 }
 
+# La conf est dans un fichier à la .ini. Normalement /usr/local/etc/postgres_manage.conf, 
+# ou ~/.postgres_manage.conf ou pointée par la variable d'env
+# postgres_manage, et sinon, passée en ligne de commande. Les priorités sont évidemment ligne de commande avant environnement
+# avant rep par défaut
+
+sub charge_conf
+{
+	# On détecte l'endroit d'où lire la conf:
+	unless (defined $conf_file)
+	{
+		# Pas de fichier en ligne de commande. On regarde l'environnement
+		if (defined $ENV{postgres_manage})
+		{
+			$conf_file=$ENV{postgres_manage};
+		}
+		else
+		{
+			if (-e ($ENV{HOME} . "/.postgres_manage.conf") )
+			{
+				$conf_file=($ENV{HOME} . "/.postgres_manage.conf");
+			}
+			else
+			{
+				if (-e "/usr/local/etc/postgres_manage.conf")
+				{
+					$conf_file="/usr/local/etc/postgres_manage.conf";
+				}
+			}
+		}
+	}
+
+	unless (defined $conf_file) 
+	{
+		die "Pas de fichier de configuration trouvé, ni passé en ligne de commande (-conf), ni dans \$postgres_manage,\nni dans " . $ENV{HOME} . "/.postgres_manage.conf, ni dans /usr/local/etc/.postgres_manage.conf\n";
+	}
+
+	# On cherche 3 valeurs: parallelisme, work_dir, et git_local_repo.
+	open CONF,$conf_file or die "Pas pu ouvrir $conf_file:$!\n";
+	while (my $line=<CONF>)
+	{
+		no strict 'refs'; # Pour pouvoir utiliser les références symboliques
+		my $line_orig=$line;
+		$line=~ s/#.*//; # Suppression des commentaires
+		$line =~ s/\s*$//; # suppression des blancs en fin de ligne
+		next if ($line =~ /^$/); # On saute les lignes vides après commentaires
+		$line =~ s/\s*=\s*/=/; # Suppression des blancs autour du =
+		# On peut maintenant traiter le reste avec une expression régulière simple :)
+		$line =~ /(\S+)=(.*)/ or die "Ligne de conf bizarre: <$line_orig>\n";
+		my $param_name=$1; my $param_value=$2;
+		${$param_name}=$param_value; # référence symbolique, par paresse.
+	}
+	die "Il me manque des paramètres dans la conf" unless (defined $parallelisme and defined $work_dir and defined $git_local_repo);
+	close CONF;
+}
+
 GetOptions ("version=s" => \$version,
-	    "mode=s" => \$mode,)
+	    "mode=s" => \$mode,
+	    "conf_file=s" => \$conf_file,)
          or die("Error in command line arguments\n");
 
 if (not defined $version and (not defined $mode or $mode !~ /list|rebuild_latest|git_update/))
@@ -413,6 +472,7 @@ if (not defined $version and (not defined $mode or $mode !~ /list|rebuild_latest
 	}
 }
 
+charge_conf();
 
 # Bon j'aurais pu jouer avec des pointeurs sur fonction. Mais j'ai la flemme
 if (not defined $mode)

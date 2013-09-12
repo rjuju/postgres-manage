@@ -1,0 +1,3 @@
+parallelisme=6
+work_dir=/home/marc/postgres
+git_local_repo=/home/marc/postgres/postgresql-git
