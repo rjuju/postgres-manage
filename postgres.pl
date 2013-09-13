@@ -371,15 +371,24 @@ sub start
 	}
 	my $pgdata="$dir/data";
 	$ENV{PGDATA}=$pgdata;
+	my $args;
+	if (compare_versions($version,'8.0')==-1) # Plus vieille qu'une 8.0
+	{
+		$args="-c wal_sync_method=fdatasync -c shared_buffers=128000 -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=32";
+	}
+	else
+	{
+		$args="-c wal_sync_method=fdatasync -c shared_buffers=1GB -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32";
+	}
 	if (! -d $pgdata)
 	{ # Création du cluster
 		system_or_die("$dir/bin/initdb");
-		system_or_die("$dir/bin/pg_ctl -w -o '-c wal_sync_method=fdatasync -c shared_buffers=1GB -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32' start -l $pgdata/log");
+		system_or_die("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
 		system_or_die("$dir/bin/createdb"); # Pour avoir une base du nom du dba (/me grosse feignasse)
 	}
 	else
 	{
-		system_or_die("$dir/bin/pg_ctl -w -o '-c wal_sync_method=fdatasync -c shared_buffers=1GB -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32' start -l $pgdata/log");
+		system_or_die("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
 	}
 }
 
