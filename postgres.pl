@@ -243,7 +243,7 @@ sub ls_latest
 	my $prevversion='';
 	my $prevmajeur='';
 	my @retour;
-	foreach my $version(@$refversions)
+	foreach my $version(sort {compare_versions($a,$b) } @$refversions)
 	{
 		$version=~/^(\d+\.\d+)/;
 		my $majeur=$1;
