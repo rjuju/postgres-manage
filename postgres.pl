@@ -1,6 +1,7 @@
 #!/usr/bin/perl -w
 use Getopt::Long;
 use File::Basename;
+use Data::Dumper;
 
 
 use strict;
@@ -11,12 +12,35 @@ use strict;
 our $parallelisme;
 our $work_dir;
 our $git_local_repo;
+our $doxy_file;
 
 my $conf_file;
 
 my $version;
 my $mode;
 my $configopt;
+
+
+my %postgis_version=(  '9.2' => {  'geos'   => 'geos-3.3.9',
+	                           'proj'   =>'proj-4.8.0',
+		                   'jsonc'  =>'json-c-0.9',
+			           'gdal'   =>'gdal-1.9.2',
+				   'postgis'=>'postgis-2.0.4',
+				},
+			'9.3' => { 'geos'   => 'geos-3.4.2',
+	                           'proj'   =>'proj-4.8.0',
+		                   'jsonc'  =>'json-c-0.9',
+			           'gdal'   =>'gdal-1.9.2',
+				   'postgis'=>'postgis-2.1.0',
+				},
+			'8.2' => { 'geos'   => 'geos-3.3.9',
+	                           'proj'   =>'proj-4.5.0',
+			           'gdal'   =>'gdal-1.9.2',
+				   'postgis'=>'postgis-1.3.2',
+				},
+		    );
+
+
 
 sub majeur_mineur
 {
@@ -157,6 +181,58 @@ sub build
 	system_or_die("nice -19 make -j${parallelisme} && make check && make install && cd contrib && make -j3 && make install");
 }
 
+# Fonction générique de compilation.
+sub build_something
+{
+	my ($dir,$tar,@commands)=@_;
+	system_or_die("tar xvf $tar");
+	chdir ($dir);
+	foreach my $command(@commands)
+	{
+		system_or_die($command);
+	}
+	chdir ('..');
+	system_or_die("rm -rf $dir");
+}
+
+# Génération d'un doxygen. À partir d'un fichier Doxyfile qui doit être indiqué dans la conf.
+sub doxy
+{
+	my ($version)=@_;
+	my $dest=dest_dir($version);
+	# Creation du fichier doxygen
+	my $src_doxy="${dest}/src/";
+	my $dest_doxy="${dest}/doxygen/";
+	mkdir("${dest_doxy}");
+	open DOXY_IN,$doxy_file or die "Impossible de trouver le fichier de conf doxygen $doxy_file: $!";
+	open DOXY_OUT,"> ${dest_doxy}/Doxyfile" or die "Impossible de créer ${dest_doxy}/Doxyfile: $!";
+	while (my $line=<DOXY_IN>)
+	{
+		$line =~ s/\$\$OUT_DIRECTORY\$\$/${dest_doxy}/;
+		$line =~ s/\$\$IN_DIRECTORY\$\$/${src_doxy}/;
+		$line =~ s/\$\$VERSION\$\$/$version/;
+		print DOXY_OUT $line;
+	}
+	close DOXY_OUT;
+	close DOXY_IN;
+	# On peut générer le doxygen
+	system("doxygen ${dest_doxy}/Doxyfile");
+	# Maintenant, vu la quantité de fichiers html dans le résultat, on crée une page index.html
+	# à la racine du rep doxy, qui redirige
+	open DOXY_OUT,"> ${dest_doxy}/index.html" or die "impossible de créer ${dest_doxy}/index.html: $!";
+	print DOXY_OUT << 'THEEND';
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="refresh" content="0; url=html/index.html" />
+</head>
+<body>
+</body>
+</html>
+
+THEEND
+	close DOXY_OUT;
+}
 
 # Pour celle la, il faut avoir les tar.gz de toutes les libs en dessous, dans la bonne version. C'est
 # basique pour le moment, mais on fait peu de postgis, donc pas eu envie de m'emmerder :)
@@ -168,41 +244,51 @@ sub build_postgis
 	{
 		die "Il faut que le LD_LIBRARY_PATH soit positionné. Lancez ce script en mode env, et importez les variables\n";
 	}
+	my ($majeur1,$majeur2)=majeur_mineur($tobuild);
+	my $majeur=$majeur1 . '.' . $majeur2;
+	unless (defined $postgis_version{$majeur})
+	{
+		die "Impossible de déterminer les versions de postgis à utiliser pour la version postgres $majeur";
+	}
+	no warnings; # Il va y avoir de l'undef ci-dessous
+	my $refversion=$postgis_version{$majeur};
+	my $geos=$refversion->{'geos'};
+	my $proj=$refversion->{'proj'};
+	my $jsonc=$refversion->{'jsonc'};
+	my $gdal=$refversion->{'gdal'};
+	my $postgis=$refversion->{'postgis'};
+	system("rm -rf $geos $proj $postgis $jsonc $gdal");
 
-	my $geos='geos-3.3.6';
-	my $proj='proj-4.8.0';
-	my $jsonc='json-c-0.9';
-	my $gdal='gdal-1.9.2';
-	my $postgis='postgis-2.0.4';
-#	if compare_versions(
+	use warnings;
+
 	my $dest=dest_dir($tobuild);
 	chdir("$work_dir/postgis") or die "Ne peux pas entrer dans $work_dir/postgis:$!\n";
-	system("rm -rf $geos $proj $postgis $jsonc $gdal");
-	system_or_die("tar xvf ${geos}.tar.bz2");
-	chdir($geos);
-	system_or_die("./configure --prefix=${dest}/geos");
-	system_or_die("make -j $parallelisme && make install");
-	chdir ('..');
-	system_or_die("tar xvf ${proj}.tar.gz");
-	chdir ($proj) or die "Ne peux pas entrer dans $proj:$!\n";
-	system_or_die("./configure --prefix=${dest}/proj");
-	system_or_die("make -j $parallelisme && make install");
-	chdir ('..');
-	system_or_die("tar xvf ${jsonc}.tar.gz");
-	chdir($jsonc) or die "Ne peux pas entrer dans $jsonc:$!\n";
-	system_or_die("./configure --prefix=${dest}/jsonc");
-	system_or_die("make && make install");
-	chdir('..');
-	system_or_die("tar xvf ${gdal}.tar.gz");
-	chdir($gdal) or die "Ne peux pas entrer dans $gdal:$!\n";
-	system_or_die("./configure --prefix=${dest}/gdal");
-	system_or_die("make -j $parallelisme && make install");
-	chdir('..');
-	system_or_die("tar xvf ${postgis}.tar.gz");
-	chdir($postgis) or die "Ne peux pas entrer dans $postgis:$!\n";
-	system_or_die("./configure --with-geosconfig=${dest}/geos/bin/geos-config --with-projdir=${dest}/proj --with-jsondir=${dest}/jsonc --with-gdalconfig=${dest}/gdal/bin/gdal-config --prefix=${dest}/postgis");
-	system_or_die("make -j $parallelisme");  # Ne marche pas totalement. On gagne quand même du temps
-	system_or_die("make && make install");
+
+	my $postgis_options='';
+	# On va modifier le PATH au fur et à mesure de la compil: les vieilles versions de postgis ne prenaient pas les chemins dans le configure
+	if (defined $geos)
+	{
+		build_something($geos,"${geos}.tar.bz2","./configure --prefix=${dest}/geos","make -j $parallelisme","make install");
+		$postgis_options.=" --with-geosconfig=${dest}/geos/bin/geos-config";
+		$ENV{PATH}="${dest}/geos/bin/" . ':' . $ENV{PATH};
+	}
+	if (defined $proj)
+	{
+		build_something($proj,"${proj}.tar.gz","./configure --prefix=${dest}/proj","make -j $parallelisme","make install");
+		$postgis_options.=" --with-projdir=${dest}/proj";
+		$ENV{PATH}="${dest}/proj/bin/" . ':' . $ENV{PATH};
+	}
+	if (defined $jsonc)
+	{
+		build_something($jsonc,"${jsonc}.tar.gz","./configure --prefix=${dest}/jsonc","make","make install");
+		$postgis_options.=" --with-jsondir=${dest}/jsonc";
+	}
+	if (defined $gdal)
+	{
+		build_something($gdal,"${gdal}.tar.gz","./configure --prefix=${dest}/gdal","make -j $parallelisme","make install");
+		$postgis_options.=" --with-gdalconfig=${dest}/gdal/bin/gdal-config";
+	}
+	build_something($postgis,"${postgis}.tar.gz","./configure $postgis_options --prefix=${dest}/postgis","make -j $parallelisme","make","make install");
 	print "Compilation postgis OK\n";
 
 }
@@ -447,7 +533,7 @@ sub charge_conf
 		die "Pas de fichier de configuration trouvé, ni passé en ligne de commande (-conf), ni dans \$postgres_manage,\nni dans " . $ENV{HOME} . "/.postgres_manage.conf, ni dans /usr/local/etc/.postgres_manage.conf\n";
 	}
 
-	# On cherche 3 valeurs: parallelisme, work_dir, et git_local_repo.
+	# On cherche 4 valeurs: parallelisme, work_dir, doxy_file et git_local_repo.
 	open CONF,$conf_file or die "Pas pu ouvrir $conf_file:$!\n";
 	while (my $line=<CONF>)
 	{
@@ -462,7 +548,7 @@ sub charge_conf
 		my $param_name=$1; my $param_value=$2;
 		${$param_name}=$param_value; # référence symbolique, par paresse.
 	}
-	die "Il me manque des paramètres dans la conf" unless (defined $parallelisme and defined $work_dir and defined $git_local_repo);
+	die "Il me manque des paramètres dans la conf" unless (defined $parallelisme and defined $work_dir and defined $git_local_repo and defined $doxy_file);
 	close CONF;
 }
 
@@ -533,6 +619,10 @@ elsif ($mode eq 'rebuild_latest')
 elsif ($mode eq 'git_update')
 {
 	git_update();
+}
+elsif ($mode eq 'doxy')
+{
+	doxy($version);
 }
 else
 {
