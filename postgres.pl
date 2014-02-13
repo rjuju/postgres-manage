@@ -13,6 +13,9 @@ our $parallelisme;
 our $work_dir;
 our $git_local_repo;
 our $doxy_file;
+our $CC;
+our $CFLAGS;
+our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 
 my $conf_file;
 
@@ -166,9 +169,24 @@ sub build
 	my ($tobuild)=@_;
 	my $dest=dest_dir($tobuild);
 	# Options de compil par défaut
-	undef $ENV{CC};
-	undef $ENV{CFLAGS};
-	$configopt="--prefix=$dest --enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug";
+	if (not defined $CC)
+	{
+		undef $ENV{CC};
+	}
+	else
+	{
+		$ENV{CC}=$CC;
+	}
+	if (not defined $CFLAGS)
+	{
+		undef $ENV{CFLAGS};
+	}
+	else
+	{
+		$ENV{CFLAGS}=$CFLAGS;
+	}
+	# construction du configure
+	$configopt="--prefix=$dest $CONFIGOPTS";
 	my $tag=version_to_REL($tobuild);
 	clean($tobuild);
 	mkdir ("${dest}") or die "Cannot mkdir ${dest} : $!\n";
@@ -552,6 +570,10 @@ sub charge_conf
 		${$param_name}=$param_value; # référence symbolique, par paresse.
 	}
 	die "Il me manque des paramètres dans la conf" unless (defined $parallelisme and defined $work_dir and defined $git_local_repo and defined $doxy_file);
+	unless (defined $CONFIGOPTS)
+	{
+		$CONFIGOPTS='--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug';#Valeur par défaut
+	}
 	close CONF;
 }
 

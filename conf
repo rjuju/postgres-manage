@@ -1,3 +1,8 @@
 parallelisme=6
 work_dir=/home/marc/postgres
 git_local_repo=/home/marc/postgres/postgresql-git
+# If you don't want the default build environment
+# CC=
+# CFLAGS=
+# Default CONFIGOPTS
+# CONFIGOPTS=--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug
