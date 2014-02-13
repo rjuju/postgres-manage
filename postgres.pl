@@ -423,7 +423,7 @@ sub env
 	print "export PATH=${dir}/bin:" . $oldpath . "\n";
 	print "export PAGER=less\n";
 	print "export PGDATA=${dir}/data\n";
-	print "export LD_LIBRARY_PATH=${dir}/proj/lib:${dir}/geos/lib:${dir}/jsonc/lib:${dir}/gdal/lib\n";
+	print "export LD_LIBRARY_PATH=${dir}/proj/lib:${dir}/geos/lib:${dir}/jsonc/lib:${dir}/gdal/lib:${dir}/lib\n";
 	print "export pgversion=$version\n";
 	if ($version =~ /^(\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+))?$/)
 	{
