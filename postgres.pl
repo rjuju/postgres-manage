@@ -16,6 +16,7 @@ our $doxy_file;
 our $CC;
 our $CFLAGS;
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
+our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 
 my $conf_file;
 
@@ -261,7 +262,8 @@ sub build_postgis
 {
 	my ($tobuild)=@_;
 	# Test que le LD_LIBRARY_PATH est bon avant d'aller plus loin
-	unless (defined $ENV{LD_LIBRARY_PATH} and $ENV{LD_LIBRARY_PATH} =~ /proj/)
+	# Si la personne l'a positionné elle même, c'est pour ses pieds :)
+	unless ((defined $ENV{LD_LIBRARY_PATH} and $ENV{LD_LIBRARY_PATH} =~ /proj/) or defined $LD_LIBRARY_PATH)
 	{
 		die "Il faut que le LD_LIBRARY_PATH soit positionné. Lancez ce script en mode env, et importez les variables\n";
 	}
@@ -423,7 +425,24 @@ sub env
 	print "export PATH=${dir}/bin:" . $oldpath . "\n";
 	print "export PAGER=less\n";
 	print "export PGDATA=${dir}/data\n";
-	print "export LD_LIBRARY_PATH=${dir}/proj/lib:${dir}/geos/lib:${dir}/jsonc/lib:${dir}/gdal/lib:${dir}/lib\n";
+	my $ld_library_path;
+
+	# Pour LD_LIBRARY_PATH: on garde ce qu'on a, et on ajoute soit la valeur par défaut, soit ce que l'utilisateur a en place dans la conf
+	if (defined $LD_LIBRARY_PATH)
+	{
+		$ld_library_path=$LD_LIBRARY_PATH;
+	}
+	else
+	{
+		$ld_library_path="${dir}/proj/lib:${dir}/geos/lib:${dir}/jsonc/lib:${dir}/gdal/lib:${dir}/lib";
+	}
+	if (defined $ENV{LD_LIBRARY_PATH})
+	{
+		$ld_library_path.= ':' . $ENV{LD_LIBRARY_PATH}
+	}
+	print "export LD_LIBRARY_PATH=$ld_library_path\n";
+
+
 	print "export pgversion=$version\n";
 	if ($version =~ /^(\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+))?$/)
 	{
