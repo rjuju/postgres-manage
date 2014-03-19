@@ -506,6 +506,10 @@ sub start
 	{
 		$args="-c wal_sync_method=fdatasync -c shared_buffers=1GB -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32";
 	}
+	if (defined ($ENV{PGSUPARGS}))
+	{
+		$args=$args . " " . $ENV{PGSUPARGS};
+	}
 	if (! -d $pgdata)
 	{ # Création du cluster
 		system_or_die("$dir/bin/initdb");
