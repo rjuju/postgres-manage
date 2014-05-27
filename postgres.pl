@@ -533,7 +533,7 @@ sub stop
 	my $pgdata="$dir/data";
 	return 1 unless (-e "$pgdata/postmaster.pid"); #pg_ctl aime pas qu'on lui demande d'éteindre une instance éteinte
 	$ENV{PGDATA}=$pgdata;
-	system_or_die("$dir/bin/pg_ctl -w -m $mode stop");
+	system("$dir/bin/pg_ctl -w -m $mode stop");
 }
 
 sub git_update
