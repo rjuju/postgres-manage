@@ -22,7 +22,7 @@ my $conf_file;
 
 my $version;
 my $mode;
-my $configopt;
+my $configopt='';
 
 
 my %postgis_version=(  '9.2' => {  'geos'   => 'geos-3.3.9',
@@ -123,10 +123,14 @@ sub compare_versions
 # Cette fonction rajoute des options de config pour les cas spéciaux (vieilles versions avec pbs d'options de compil, etc
 # Cette fonction utilise la fonction de comparaisons de versions pour faire ses petites affaires.
 # On y change les configopt au besoin, l'environnement (CC, CFLAGS…)
-# Pour le moment elle est vide :)
+# Pour éviter les optimisations qui empêchent l'initdb
 sub special_case_compile
 {
 	my ($version)=@_;
+        if (compare_versions('9.0.0',$version))
+        {
+            $ENV{CFLAGS}.=' -O0';
+        }
 	return $configopt;
 }
 
