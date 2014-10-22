@@ -76,6 +76,10 @@ sub calcule_mineur
 	{
 		$score=300+$1;
 	}
+        elsif ($mineur =~ /^dev$/)
+        {
+                $score=400;
+        }
 	else
 	{
 		die "Mineur non prévu\n";
@@ -113,7 +117,7 @@ sub compare_versions
 	}
 	# Fin du cas simple :)
 	# Maintenant, si les mineurs sont juste des numériques, c'est facile. Sinon, il faut prendre en compte que
-	# rc>beta>alpha. Pour rendre la comparaison simple, alpha=0, beta=100, rc=200, final=300.
+	# dev>rc>beta>alpha. Pour rendre la comparaison simple, alpha=0, beta=100, rc=200, final=300, dev (head de la branche)=400.
 	# On les somme au numéro de version trouvé. C'est ce que fait la fonction calcule_mineur
 	my $score1=calcule_mineur($mineur1);
 	my $score2=calcule_mineur($mineur2);
@@ -138,11 +142,19 @@ sub special_case_compile
 sub version_to_REL
 {
 	my ($version)=@_;
-	if  ($version =~ /^dev|^review/)
+	my $rel=$version;
+	if  ($version =~ /^dev$|^review$/)
 	{
 		return 'master';
 	}
-	my $rel=$version;
+        elsif ($version =~ /(\d+\.\d+)\.dev$/)
+        {
+            # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
+	    $rel=~ s/\./_/g;
+            $rel=~ s/^/origin\/REL/;
+            $rel=~ s/_dev$/_STABLE/;
+            return $rel;
+        }
 	$rel=~ s/\./_/g;
 	$rel=~ s/beta/BETA/g;
 	$rel=~ s/alpha/ALPHA/g;
@@ -160,7 +172,6 @@ sub system_or_die
 	{
 		die "Commande $command a echoué.\n";
 	}
-
 }
 
 sub dest_dir
@@ -196,8 +207,11 @@ sub build
 	clean($tobuild);
 	mkdir ("${dest}") or die "Cannot mkdir ${dest} : $!\n";
 	chdir "${dest}" or die "Cannot chdir ${dest} : $!\n";
-	system_or_die("git clone ${git_local_repo} src");
+	mkdir ("src") or die "Cannot mkdir src : $!\n";
+	mkdir ("src/.git") or die "Cannot mkdir src/.git : $!\n";
+	system_or_die("git clone --mirror ${git_local_repo} src/.git");
 	chdir "src" or die "Cannot chdir src : $!\n";
+	system_or_die("git config --bool core.bare false");
 	system_or_die("git reset --hard");
 	system_or_die("git checkout $tag"); # à tester pour le head
 	system_or_die("rm -rf .git"); # On se moque des infos git maintenant
@@ -448,12 +462,15 @@ sub env
 
 
 	print "export pgversion=$version\n";
-	if ($version =~ /^(\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+))?$/)
+        # Faudra revoir toute cette numerotation avec la sortie de la 10 :)
+        # Un hash de la chaîne de version ?
+        if ($version =~ /^(\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?$/)
 	{
 		my $minor='';
-		if (defined $4)
+		if (defined $4) # C'est une alpha-beta-rc numerotee
 		{
 			my $prefix;
+                        # Ok si ça continue à dégénérer je vais arrêter avec ces elsif :)
 			if ($4 eq 'alpha')
 			{
 				$prefix='0';
@@ -462,13 +479,21 @@ sub env
 			{
 				$prefix='1';
 			}
+                        elsif ($4 eq 'rc')
+                        {
+                                $prefix='2';
+                        }
 			else
 			{
-				$prefix='2';
+				$prefix='3';
 			}
 			# On part de l'hypothèse qu'il n'y a pas plus de 9 betas/alphas/rc
 			$minor=$prefix.$5;
 		}
+                elsif (defined $6) # C'est le commit le plus avance de cette branche
+                {
+                        $minor='00'; # Arbitraire, alpha0 n'existera jamais
+                }
 		else
 		{
 			$minor=$3;
