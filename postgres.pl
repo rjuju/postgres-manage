@@ -624,7 +624,7 @@ sub charge_conf
 	die "Il me manque des paramètres dans la conf" unless (defined $parallelisme and defined $work_dir and defined $git_local_repo and defined $doxy_file);
 	unless (defined $CONFIGOPTS)
 	{
-		$CONFIGOPTS='--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug';#Valeur par défaut
+		$CONFIGOPTS='--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug --with-ossp-uuid';#Valeur par défaut
 	}
 	close CONF;
 }
