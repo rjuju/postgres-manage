@@ -443,6 +443,9 @@ sub env
 	print "export PATH=${dir}/bin:" . $oldpath . "\n";
 	print "export PAGER=less\n";
 	print "export PGDATA=${dir}/data\n";
+	print 'if [[ $PS1 != *"pgversion"* ]]; then' . "\n";
+	print '    export PS1="[\$pgversion]$PS1"' . "\n";
+	print "fi\n";
 	my $ld_library_path;
 
 	# Pour LD_LIBRARY_PATH: on garde ce qu'on a, et on ajoute soit la valeur par défaut, soit ce que l'utilisateur a en place dans la conf
