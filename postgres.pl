@@ -397,6 +397,7 @@ sub rebuild_latest
         # Le nom des olddirs va ressembler à /home/marc/postgres/postgresql-9.3.0
         foreach my $olddir(@olddirs)
         {
+            next if $olddir =~ /dev$/;
             $olddir=~ /(\d+\.\d+\.\d+)$/ or die "Nom de dir bizarre: $olddir\n";
             my $oldversion=$1;
             if (compare_versions($oldversion,$version)==0)
