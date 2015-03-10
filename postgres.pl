@@ -217,6 +217,7 @@ sub build
 	system_or_die("rm -rf .git"); # On se moque des infos git maintenant
 #	system_or_die ("cp -rf ${git_local_repo}/../xlogdump ${dest}/src/contrib/");
 	special_case_compile($tobuild);
+        print "./configure $configopt\n";
 	system_or_die("./configure $configopt");
 	system_or_die("nice -19 make -j${parallelisme} && make check && make install && cd contrib && make -j3 && make install");
 }
