@@ -204,8 +204,12 @@ sub build
     # construction du configure
     $configopt="--prefix=$dest $CONFIGOPTS";
     my $tag=version_to_REL($tobuild);
-    clean($tobuild);
-    mkdir ("${dest}") or die "Cannot mkdir ${dest} : $!\n";
+    # on garde les données
+    clean($tobuild, 0);
+    mkdir ("${dest}");
+    # le mkdir du répertoire est facultatif, il a pu être conservé par le clean
+    # si ce n'est pas le premier build de cette version
+    die "Cannot mkdir ${dest} : $!\n" if (not -d ${dest});
     chdir "${dest}" or die "Cannot chdir ${dest} : $!\n";
     mkdir ("src") or die "Cannot mkdir src : $!\n";
     mkdir ("src/.git") or die "Cannot mkdir src/.git : $!\n";
@@ -422,10 +426,20 @@ sub rebuild_latest
 
 sub clean
 {
-    my ($version)=@_;
+    my ($version, $remove_data)=@_;
+    $remove_data = 0 if not defined $remove_data;
     my $dest=dest_dir($version);
     stop($version,'immediate'); # Si ça ne réussit pas, tant pis
-    system_or_die("rm -rf $dest");
+    if ($remove_data)
+    {
+        # on supprime tout le répertoire, y compris les données
+        system_or_die("rm -rf $dest");
+    } else {
+        # si le répertoire n'existe pas (premier build), rien à faire
+        return if (not -d $dest);
+        # on conserve les données
+        system_or_die("find $dest -mindepth 1 -maxdepth 1 -type d -path '*data*' -prune -o -exec rm -rf {} \\;");
+    }
 }
 #
 # Cette fonction ne fait qu'afficher le shell à exécuter
@@ -680,7 +694,8 @@ elsif ($mode eq 'stop')
 }
 elsif ($mode eq 'clean')
 {
-    clean($version);
+    # on supprime aussi les données
+    clean($version, 1);
 }
 elsif ($mode eq 'list')
 {
