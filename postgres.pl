@@ -131,7 +131,7 @@ sub compare_versions
 sub special_case_compile
 {
 	my ($version)=@_;
-        if (compare_versions('9.0.0',$version))
+        if (compare_versions($version,'9.0.0') < 0)
         {
             $ENV{CFLAGS}.=' -O0';
         }
