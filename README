@@ -7,3 +7,28 @@ Les versions comprises:
 dev (head)
 9.3.dev (le commit le plus récent sur 9.3)
 review (head aussi, mais juste pour bidouiller dans un second rep)
+
+exemple de bashrc:
+
+function pg()
+{
+    source <(/home/marc/postgres/postgres.pl -version $1 -mode env)
+#       `/home/marc/postgres/postgres.pl -mode env -version $1`
+}
+
+
+alias pgstart="/home/marc/postgres/postgres.pl -mode start"
+alias pgstop="/home/marc/postgres/postgres.pl -mode stop"
+alias pgbuild="/home/marc/postgres/postgres.pl -mode build"
+alias pgbuildpostgis="/home/marc/postgres/postgres.pl -mode build_postgis"
+alias pgclean="/home/marc/postgres/postgres.pl -mode clean"
+alias pgls="/home/marc/postgres/postgres.pl -mode list"
+alias pglsavail="/home/marc/postgres/postgres.pl -mode list_avail"
+alias pglslatest="/home/marc/postgres/postgres.pl -mode list_latest"
+alias pgrebuild="/home/marc/postgres/postgres.pl -mode rebuild_latest"
+alias pggitupdate="/home/marc/postgres/postgres.pl -mode git_update"
+alias pgdoxy="/home/marc/postgres/postgres.pl -mode doxy"
+# Juste là à titre d'exemple
+#export PGSUPARGS='-c fsync=off'
+export PGHOST=/tmp
+
