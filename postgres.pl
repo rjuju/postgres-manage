@@ -546,7 +546,7 @@ sub start
     my $pgdata="$dir/data";
     $ENV{PGDATA}=$pgdata;
     my $args;
-    if (compare_versions($version,'8.0')==-1) # Plus vieille qu'une 8.0
+    if (compare_versions($version,'8.2')==-1) # Plus vieille qu'une 8.2
     {
         $args="-c wal_sync_method=fdatasync -c shared_buffers=128000 -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=32";
     }
