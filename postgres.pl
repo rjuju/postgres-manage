@@ -2,6 +2,7 @@
 use Getopt::Long;
 use File::Basename;
 use Data::Dumper;
+use File::Copy;
 
 
 use strict;
@@ -24,8 +25,15 @@ my $version;
 my $mode;
 my $configopt='';
 
-
-my %postgis_version=(  '9.2' => {  'geos'   => 'geos-3.3.9',
+# Hash utilisé pour décider quelles versions utiliser par rapport à une version de PG
+my %postgis_version=(  
+            '9.2' => {  'geos'   => 'geos-3.3.9',
+                    'proj'   =>'proj-4.8.0',
+                    'jsonc'  =>'json-c-0.9',
+                    'gdal'   =>'gdal-1.9.2',
+                   'postgis'=>'postgis-2.0.4',
+                },
+             '9.1' => {  'geos'   => 'geos-3.3.9',
                     'proj'   =>'proj-4.8.0',
                     'jsonc'  =>'json-c-0.9',
                     'gdal'   =>'gdal-1.9.2',
@@ -33,7 +41,7 @@ my %postgis_version=(  '9.2' => {  'geos'   => 'geos-3.3.9',
                 },
             '9.4' => { 'geos'   => 'geos-3.4.2',
                     'proj'   =>'proj-4.9.1',
-                    'jsonc'  =>'json-c-0.12',
+                    'jsonc'  =>'json-c-0.12-20140410',
                     'gdal'   =>'gdal-1.11.2',
                    'postgis'=>'postgis-2.1.7',
                 },
@@ -50,6 +58,25 @@ my %postgis_version=(  '9.2' => {  'geos'   => 'geos-3.3.9',
                 },
             );
 
+# Hash utilisé pour donner la correspondance entre une regexp de nom de fichier à télécharger et son URL
+# Les fonctions anonymes sont volontairement compactes :)
+# Si ça devient trop chiant, à la place, faudra retourner une liste d'URL candidates, et toutes les tester.
+# Les règles de rangement sur ces projets, c'est n'importe quoi
+my %tar_to_url=(
+            'json-c-\d+\.\d+-\d+\.tar\.gz' => sub { return ("https://github.com/json-c/json-c/archive/" . $_[0])},
+            'json-c-\d+\.\d+\.tar\.gz' => sub { return ("https://github.com/downloads/json-c/json-c/" . $_[0])},
+            'gdal' => sub { $_[0] =~ /gdal-(.+?)\.tar\.gz/;
+                            my $version=$1;
+                            if (compare_versions($version,'1.10.2')>=0) # Le fichier est dans un sous-répertoire
+                            {
+                               return ("http://download.osgeo.org/gdal/" . $version . '/' . $_[0] )
+                            }
+                            return ("http://download.osgeo.org/gdal/${_[0]}")
+                          },
+            'proj' => sub { return ("http://download.osgeo.org/proj/" . $_[0])},
+            'geos' => sub { return ("http://download.osgeo.org/geos/" . $_[0])},
+            'postgis' => sub { return ("http://download.osgeo.org/postgis/source/" . $_[0])},
+            );
 
 
 sub majeur_mineur
@@ -172,12 +199,25 @@ sub version_to_REL
 # Pour éviter d'avoir des die partout dans le code
 sub system_or_die
 {
-    my ($command)=@_;
-    my $rv=system($command);
-    if ($rv>>8 != 0)
+    my ($command,$mute)=@_;
+    $mute=0 unless defined($mute);
+    my $fh;
+    my @retour;
+    open($fh,'-|',$command) or die "Impossible de lancer $command: $!";
+    while (my $line=<$fh>)
+    {
+        push @retour,($line);
+        unless ($mute)
+        {
+            print $line;
+        }
+    }
+    close ($fh);
+    if ($?>>8 != 0)
     {
         die "Commande $command a echoué.\n";
     }
+    return \@retour; # Par référence, ça peut être gros sinon :)
 }
 
 sub dest_dir
@@ -235,8 +275,14 @@ sub build
 # Fonction générique de compilation.
 sub build_something
 {
-    my ($dir,$tar,@commands)=@_;
-    system_or_die("tar xvf $tar");
+    my ($tar,@commands)=@_;
+    # Some files may not have been downloaded. Try to get them
+    try_download($tar) if ((! -f $tar) or (-z $tar));
+    print "Décompression de $tar\n";
+    my $retour_tar=system_or_die("tar xvf $tar",1); # 1 = mute, on veut aps voir le tar à l'écran
+    # On va prendre la première ligne pour savoir dans quel répertoire ça a décompressé (y a le projet json-c où ils sont niais :) )
+    $retour_tar->[0] =~ /^(.*)\// or die "Impossible de trouver le répertoire de " . $retour_tar->[0];
+    my $dir = $1;
     chdir ($dir);
     foreach my $command(@commands)
     {
@@ -244,6 +290,31 @@ sub build_something
     }
     chdir ('..');
     system_or_die("rm -rf $dir");
+}
+
+# Find the file
+# We'll use regexps to guess what we are trying to download :)
+sub try_download
+{
+    my ($file)=@_;
+    # Recherche de l'entrée de %tar_to_url qui corresponde (regexp)
+    my $url;
+    my $found=0;
+    while (my ($regexp,$subref)=each %tar_to_url)
+    {
+       next unless $file =~ /$regexp/;
+       $found=1;
+       $url=&{$subref}($file);
+    }
+    die "Impossible de trouver l'URL de $file" unless ($found);
+    unlink ("$work_dir/postgis/$file"); # On essaye de supprimer l'ancien avant. Normalement, y a pas
+    print "Téléchargement de $file : wget $url -O $work_dir/postgis/$file\n";
+    system("wget $url -O $work_dir/postgis/$file");
+    unless ($? >>8 == 0)
+    {
+        move ("$work_dir/postgis/$file","$work_dir/postgis/$file.failed");
+        die "Cannot download $file";
+    }
 }
 
 # Génération d'un doxygen. À partir d'un fichier Doxyfile qui doit être indiqué dans la conf.
@@ -309,38 +380,39 @@ sub build_postgis
     my $jsonc=$refversion->{'jsonc'};
     my $gdal=$refversion->{'gdal'};
     my $postgis=$refversion->{'postgis'};
+    
+    chdir("$work_dir/postgis") or die "Ne peux pas entrer dans $work_dir/postgis:$!\n";
     system("rm -rf $geos $proj $postgis $jsonc $gdal");
 
     use warnings;
 
     my $dest=dest_dir($tobuild);
-    chdir("$work_dir/postgis") or die "Ne peux pas entrer dans $work_dir/postgis:$!\n";
 
     my $postgis_options='';
     # On va modifier le PATH au fur et à mesure de la compil: les vieilles versions de postgis ne prenaient pas les chemins dans le configure
     if (defined $geos)
     {
-        build_something($geos,"${geos}.tar.bz2","./configure --prefix=${dest}/geos","make -j $parallelisme","make install");
+        build_something("${geos}.tar.bz2","./configure --prefix=${dest}/geos","make -j $parallelisme","make install");
         $postgis_options.=" --with-geosconfig=${dest}/geos/bin/geos-config";
         $ENV{PATH}="${dest}/geos/bin/" . ':' . $ENV{PATH};
     }
     if (defined $proj)
     {
-        build_something($proj,"${proj}.tar.gz","./configure --prefix=${dest}/proj","make -j $parallelisme","make install");
+        build_something("${proj}.tar.gz","./configure --prefix=${dest}/proj","make -j $parallelisme","make install");
         $postgis_options.=" --with-projdir=${dest}/proj";
         $ENV{PATH}="${dest}/proj/bin/" . ':' . $ENV{PATH};
     }
     if (defined $jsonc)
     {
-        build_something($jsonc,"${jsonc}.tar.gz","./configure --prefix=${dest}/jsonc","make","make install");
+        build_something("${jsonc}.tar.gz","./configure --prefix=${dest}/jsonc","make","make install");
         $postgis_options.=" --with-jsondir=${dest}/jsonc";
     }
     if (defined $gdal)
     {
-        build_something($gdal,"${gdal}.tar.gz","./configure --prefix=${dest}/gdal","make -j $parallelisme","make install");
+        build_something("${gdal}.tar.gz","./configure --prefix=${dest}/gdal","make -j $parallelisme","make install");
         $postgis_options.=" --with-gdalconfig=${dest}/gdal/bin/gdal-config";
     }
-    build_something($postgis,"${postgis}.tar.gz","./configure $postgis_options --prefix=${dest}/postgis","make -j $parallelisme","make","make install");
+    build_something("${postgis}.tar.gz","./configure $postgis_options --prefix=${dest}/postgis","make -j $parallelisme","make","make install");
     print "Compilation postgis OK\n";
 
 }
