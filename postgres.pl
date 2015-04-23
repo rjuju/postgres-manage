@@ -380,8 +380,13 @@ sub build_postgis
     my $jsonc=$refversion->{'jsonc'};
     my $gdal=$refversion->{'gdal'};
     my $postgis=$refversion->{'postgis'};
-    
-    chdir("$work_dir/postgis") or die "Ne peux pas entrer dans $work_dir/postgis:$!\n";
+    my $postgisdir = "$work_dir/postgis";
+
+    if (not -d $postgisdir)
+    {
+        mkdir($postgisdir);
+    }
+    chdir($postgisdir) or die "Ne peux pas entrer dans $postgisdir\n";
     system("rm -rf $geos $proj $postgis $jsonc $gdal");
 
     use warnings;
