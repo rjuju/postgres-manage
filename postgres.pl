@@ -126,8 +126,8 @@ sub compare_versions
 {
     my ($version1,$version2)=@_;
     # Cas de sortie:
-    return -1 if ($version1 eq 'dev');
-    return 1 if ($version2 eq 'dev');
+    return 1 if ($version1 eq 'dev');
+    return -1 if ($version2 eq 'dev');
     # 9.3 et 9.3.0 c'est pareil. On commence par ça
     if ($version1 =~ /^\d+\.\d+$/)
     {
