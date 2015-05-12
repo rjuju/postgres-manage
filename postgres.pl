@@ -2,6 +2,7 @@
 use Getopt::Long;
 use File::Basename;
 use Data::Dumper;
+use Digest::MD5 qw(md5);
 use File::Copy;
 
 
@@ -22,6 +23,7 @@ our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande q
 my $conf_file;
 
 my $version;
+my $clusterid;
 my $mode;
 my $configopt='';
 
@@ -224,6 +226,19 @@ sub dest_dir
 {
     my ($version)=@_;
     return("${work_dir}/postgresql-${version}");
+}
+
+sub get_pgdata
+{
+    my ($dir, $clusterid) = @_;
+    my $id = '';
+    $id = $clusterid if $clusterid ne 0;
+    return "$dir/data$id";
+}
+
+sub get_pgport
+{
+    return unpack('n',pack('B15','0'.substr(unpack('B128',md5($version.$clusterid)),0,15))) + 1025;
 }
 
 sub build
@@ -495,7 +510,8 @@ sub rebuild_latest
             else
             {
                 print "Suppression de la version obsolete $oldversion.\n";
-                system_or_die ("rm -rf $olddir");
+                # on conserve les répertoire $PGDATA cependant
+                clean($olddir, 0);
             }
         }
         # Seulement les versions >= 8.4 (versions supportées)
@@ -512,7 +528,7 @@ sub clean
     my ($version, $remove_data)=@_;
     $remove_data = 0 if not defined $remove_data;
     my $dest=dest_dir($version);
-    stop($version,'immediate'); # Si ça ne réussit pas, tant pis
+    stop_all_clusters($version,'immediate'); # Si ça ne réussit pas, tant pis
     if ($remove_data)
     {
         # on supprime tout le répertoire, y compris les données
@@ -535,15 +551,27 @@ sub env
         print STDERR "Hé, j'ai besoin d'un numero de version\n";
         die;
     }
+    if (not defined $clusterid)
+    {
+        print STDERR "Hé, j'ai besoin d'un numero de cluster\n";
+        die;
+    }
+    # on retourne une erreur ici si le numéro de version n'est pas reconnu
+    unless ($version =~ /^(\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?$/)
+    {
+        print STDERR "Version incompréhensible: <$version>\n";
+        die;
+    }
     # On nettoie le path des anciennes versions, au cas où
     my $oldpath=$ENV{PATH};
     $oldpath =~ s/${work_dir}.*?\/bin://g;
     my $dir=dest_dir($version);
+    my $pgdata=get_pgdata($dir,$clusterid);
     print "export PATH=${dir}/bin:" . $oldpath . "\n";
     print "export PAGER=less\n";
-    print "export PGDATA=${dir}/data\n";
+    print "export PGDATA=${pgdata}\n";
     print 'if [[ $PS1 != *"pgversion"* ]]; then' . "\n";
-    print '    export PS1="[\$pgversion]$PS1"' . "\n";
+    print '    export PS1="[\$pgversion/\$pgclusterid]$PS1"' . "\n";
     print "fi\n";
     my $ld_library_path;
 
@@ -564,69 +592,23 @@ sub env
 
 
     print "export pgversion=$version\n";
-        # Faudra revoir toute cette numerotation avec la sortie de la 10 :)
-        # Un hash de la chaîne de version ?
-        if ($version =~ /^(\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?$/)
-    {
-        my $minor='';
-        if (defined $4) # C'est une alpha-beta-rc numerotee
-        {
-            my $prefix;
-                        # Ok si ça continue à dégénérer je vais arrêter avec ces elsif :)
-            if ($4 eq 'alpha')
-            {
-                $prefix='0';
-            }
-            elsif ($4 eq 'beta')
-            {
-                $prefix='1';
-            }
-                        elsif ($4 eq 'rc')
-                        {
-                                $prefix='2';
-                        }
-            else
-            {
-                $prefix='3';
-            }
-            # On part de l'hypothèse qu'il n'y a pas plus de 9 betas/alphas/rc
-            $minor=$prefix.$5;
-        }
-                elsif (defined $6) # C'est le commit le plus avance de cette branche
-                {
-                        $minor='00'; # Arbitraire, alpha0 n'existera jamais
-                }
-        else
-        {
-            $minor=$3;
-        }
-        # Version numérique
-        print "export PGPORT=5".$1.$2.$minor."\n";
-    }
-    elsif ($version eq 'review')
-    {
-        print "export PGPORT=6666\n";
-    }
-    elsif ($version eq 'dev')
-    {
-        print "export PGPORT=6667\n";
-    }
-    else
-    {
-        die "Version incompréhensible: <$version>\n";
-    }
+    print "export pgclusterid=$clusterid\n";
+    # Génération d'un numéro de port à partir d'un hash de la version et du n° de cluster
+    my $pgport=get_pgport();
+    print "export PGPORT=$pgport\n";
 }
 
-sub start
+sub start_one_cluster
 {
-    my ($version)=@_;
+    my ($version,$clusterid)=@_;
     my $dir=dest_dir($version);
     $ENV{LANG}="en_GB.utf8";
+    print "Starting cluster $version/$clusterid...\n";
     unless (-f "$dir/bin/pg_ctl")
     {
         die "Pas de binaire $dir/bin/pg_ctl\n";
     }
-    my $pgdata="$dir/data";
+    my $pgdata=get_pgdata($dir,$clusterid);
     $ENV{PGDATA}=$pgdata;
     my $args;
     if (compare_versions($version,'8.2')==-1) # Plus vieille qu'une 8.2
@@ -657,18 +639,55 @@ sub start
     }
 }
 
-sub stop
+sub start_all_clusters
 {
-    my ($version,$mode)=@_;
+    my ($version) = @_;
+    my $dir=dest_dir($version);
+
+    opendir(my $dh, $dir) || return;
+    while (readdir($dh))
+    {
+        if ($_ =~ /data\d*/){
+            my $id = $_;
+            $id =~ s/data//;
+            $id = 0 if $id eq '';
+            start_one_cluster($version,$id);
+        }
+    }
+    closedir $dh;
+}
+
+sub stop_one_cluster
+{
+    my ($version,$clusterid,$mode)=@_;
     if (not defined $mode)
     {
         $mode = 'fast';
     }
     my $dir=dest_dir($version);
-    my $pgdata="$dir/data";
+    my $pgdata=get_pgdata($dir, $clusterid);
+    print "Stopping cluster $version/$clusterid...\n";
     return 1 unless (-e "$pgdata/postmaster.pid"); #pg_ctl aime pas qu'on lui demande d'éteindre une instance éteinte
     $ENV{PGDATA}=$pgdata;
     system("$dir/bin/pg_ctl -w -m $mode stop");
+}
+
+sub stop_all_clusters
+{
+    my ($version,$mode)=@_;
+    my $dir=dest_dir($version);
+
+    opendir(my $dh, $dir) || return;
+    while (readdir($dh))
+    {
+        if ($_ =~ /data\d*/){
+            my $id = $_;
+            $id =~ s/data//;
+            $id = 0 if $id eq '';
+            stop_one_cluster($version,$id,$mode);
+        }
+    }
+    closedir $dh;
 }
 
 sub git_update
@@ -734,7 +753,6 @@ sub charge_conf
     }
     close CONF;
 }
-
 GetOptions ("version=s" => \$version,
         "mode=s" => \$mode,
         "conf_file=s" => \$conf_file,)
@@ -750,6 +768,19 @@ if (not defined $version and (not defined $mode or $mode !~ /list|rebuild_latest
     {
         die "Il me faut une version (option -version, ou bien variable d'env pgversion\n";
     }
+    if (defined $ENV{pgclusterid})
+    {
+        $clusterid=$ENV{pgclusterid};
+    }
+}
+
+# par défaut, on est sur le cluster 0
+$clusterid = '0' if not defined($clusterid);
+# Si le numéro de version contient un numéro de cluster, on le gère
+if (defined $version and $version =~ /^(.+)\/(\d+)$/)
+{
+    $version = $1;
+    $clusterid = int($2);
 }
 
 charge_conf();
@@ -773,11 +804,19 @@ elsif ($mode eq 'build_postgis')
 }
 elsif ($mode eq 'start')
 {
-    start($version);
+    start_one_cluster($version, $clusterid);
+}
+elsif ($mode eq 'startall')
+{
+    start_all_clusters($version);
 }
 elsif ($mode eq 'stop')
 {
-    stop($version);
+    stop_one_cluster($version, $clusterid);
+}
+elsif ($mode eq 'stopall')
+{
+    stop_all_clusters($version);
 }
 elsif ($mode eq 'clean')
 {

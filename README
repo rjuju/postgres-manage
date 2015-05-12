@@ -18,7 +18,9 @@ function pg()
 
 
 alias pgstart="/home/marc/postgres/postgres.pl -mode start"
+alias pgstartall="/home/marc/postgres/postgres.pl -mode startall"
 alias pgstop="/home/marc/postgres/postgres.pl -mode stop"
+alias pgstopall="/home/marc/postgres/postgres.pl -mode stopall"
 alias pgbuild="/home/marc/postgres/postgres.pl -mode build"
 alias pgbuildpostgis="/home/marc/postgres/postgres.pl -mode build_postgis"
 alias pgclean="/home/marc/postgres/postgres.pl -mode clean"
