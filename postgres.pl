@@ -28,57 +28,57 @@ my $mode;
 my $configopt='';
 
 # Hash utilisé pour décider quelles versions utiliser par rapport à une version de PG
-my %postgis_version=(  
-            '9.2' => {  'geos'   => 'geos-3.3.9',
-                    'proj'   =>'proj-4.8.0',
-                    'jsonc'  =>'json-c-0.9',
-                    'gdal'   =>'gdal-1.9.2',
-                   'postgis'=>'postgis-2.0.4',
-                },
-             '9.1' => {  'geos'   => 'geos-3.3.9',
-                    'proj'   =>'proj-4.8.0',
-                    'jsonc'  =>'json-c-0.9',
-                    'gdal'   =>'gdal-1.9.2',
-                   'postgis'=>'postgis-2.0.4',
-                },
-            '9.4' => { 'geos'   => 'geos-3.4.2',
-                    'proj'   =>'proj-4.9.1',
-                    'jsonc'  =>'json-c-0.12-20140410',
-                    'gdal'   =>'gdal-1.11.2',
-                   'postgis'=>'postgis-2.1.7',
-                },
-            '9.3' => { 'geos'   => 'geos-3.4.2',
-                    'proj'   =>'proj-4.8.0',
-                    'jsonc'  =>'json-c-0.9',
-                    'gdal'   =>'gdal-1.9.2',
-                   'postgis'=>'postgis-2.1.0',
-                },
-            '8.2' => { 'geos'   => 'geos-3.3.9',
-                    'proj'   =>'proj-4.5.0',
-                    'gdal'   =>'gdal-1.9.2',
-                   'postgis'=>'postgis-1.3.2',
-                },
-            );
+my %postgis_version=(
+    '9.2' => {  'geos'   => 'geos-3.3.9',
+            'proj'   =>'proj-4.8.0',
+            'jsonc'  =>'json-c-0.9',
+            'gdal'   =>'gdal-1.9.2',
+           'postgis'=>'postgis-2.0.4',
+        },
+     '9.1' => {  'geos'   => 'geos-3.3.9',
+            'proj'   =>'proj-4.8.0',
+            'jsonc'  =>'json-c-0.9',
+            'gdal'   =>'gdal-1.9.2',
+           'postgis'=>'postgis-2.0.4',
+        },
+    '9.4' => { 'geos'   => 'geos-3.4.2',
+            'proj'   =>'proj-4.9.1',
+            'jsonc'  =>'json-c-0.12-20140410',
+            'gdal'   =>'gdal-1.11.2',
+           'postgis'=>'postgis-2.1.7',
+        },
+    '9.3' => { 'geos'   => 'geos-3.4.2',
+            'proj'   =>'proj-4.8.0',
+            'jsonc'  =>'json-c-0.9',
+            'gdal'   =>'gdal-1.9.2',
+           'postgis'=>'postgis-2.1.0',
+        },
+    '8.2' => { 'geos'   => 'geos-3.3.9',
+            'proj'   =>'proj-4.5.0',
+            'gdal'   =>'gdal-1.9.2',
+           'postgis'=>'postgis-1.3.2',
+        },
+);
 
 # Hash utilisé pour donner la correspondance entre une regexp de nom de fichier à télécharger et son URL
 # Les fonctions anonymes sont volontairement compactes :)
 # Si ça devient trop chiant, à la place, faudra retourner une liste d'URL candidates, et toutes les tester.
 # Les règles de rangement sur ces projets, c'est n'importe quoi
 my %tar_to_url=(
-            'json-c-\d+\.\d+-\d+\.tar\.gz' => sub { return ("https://github.com/json-c/json-c/archive/" . $_[0])},
-            'json-c-\d+\.\d+\.tar\.gz' => sub { return ("https://github.com/downloads/json-c/json-c/" . $_[0])},
-            'gdal' => sub { $_[0] =~ /gdal-(.+?)\.tar\.gz/;
-                            my $version=$1;
-                            if (compare_versions($version,'1.10.2')>=0) # Le fichier est dans un sous-répertoire
-                            {
-                               return ("http://download.osgeo.org/gdal/" . $version . '/' . $_[0] )
-                            }
-                            return ("http://download.osgeo.org/gdal/${_[0]}")
-                          },
-            'proj' => sub { return ("http://download.osgeo.org/proj/" . $_[0])},
-            'geos' => sub { return ("http://download.osgeo.org/geos/" . $_[0])},
-            'postgis' => sub { return ("http://download.osgeo.org/postgis/source/" . $_[0])},
-            );
+    'json-c-\d+\.\d+-\d+\.tar\.gz' => sub { return ("https://github.com/json-c/json-c/archive/" . $_[0])},
+    'json-c-\d+\.\d+\.tar\.gz' => sub { return ("https://github.com/downloads/json-c/json-c/" . $_[0])},
+    'gdal' => sub { $_[0] =~ /gdal-(.+?)\.tar\.gz/;
+                    my $version=$1;
+                    if (compare_versions($version,'1.10.2')>=0) # Le fichier est dans un sous-répertoire
+                    {
+                       return ("http://download.osgeo.org/gdal/" . $version . '/' . $_[0] )
+                    }
+                    return ("http://download.osgeo.org/gdal/${_[0]}")
+                  },
+    'proj' => sub { return ("http://download.osgeo.org/proj/" . $_[0])},
+    'geos' => sub { return ("http://download.osgeo.org/geos/" . $_[0])},
+    'postgis' => sub { return ("http://download.osgeo.org/postgis/source/" . $_[0])},
+);
 
 
 sub majeur_mineur
@@ -111,10 +111,10 @@ sub calcule_mineur
     {
         $score=300+$1;
     }
-        elsif ($mineur =~ /^dev$/)
-        {
-                $score=400;
-        }
+    elsif ($mineur =~ /^dev$/)
+    {
+            $score=400;
+    }
     else
     {
         die "Mineur non prévu\n";
@@ -166,10 +166,10 @@ sub compare_versions
 sub special_case_compile
 {
     my ($version)=@_;
-        if (compare_versions($version,'9.0.0') < 0)
-        {
-            $ENV{CFLAGS}.=' -O0';
-        }
+    if (compare_versions($version,'9.0.0') < 0)
+    {
+        $ENV{CFLAGS}.=' -O0';
+    }
     return $configopt;
 }
 
@@ -182,14 +182,14 @@ sub version_to_REL
     {
         return 'master';
     }
-        elsif ($version =~ /(\d+\.\d+)\.dev$/)
-        {
-            # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
+    elsif ($version =~ /(\d+\.\d+)\.dev$/)
+    {
+        # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
         $rel=~ s/\./_/g;
-            $rel=~ s/^/origin\/REL/;
-            $rel=~ s/_dev$/_STABLE/;
-            return $rel;
-        }
+        $rel=~ s/^/origin\/REL/;
+        $rel=~ s/_dev$/_STABLE/;
+        return $rel;
+    }
     $rel=~ s/\./_/g;
     $rel=~ s/beta/BETA/g;
     $rel=~ s/alpha/ALPHA/g;
@@ -282,7 +282,7 @@ sub build
     system_or_die("rm -rf .git"); # On se moque des infos git maintenant
 #   system_or_die ("cp -rf ${git_local_repo}/../xlogdump ${dest}/src/contrib/");
     special_case_compile($tobuild);
-        print "./configure $configopt\n";
+    print "./configure $configopt\n";
     system_or_die("./configure $configopt");
     system_or_die("nice -19 make -j${parallelisme} && make check && make install && cd contrib && make -j3 && make install");
 }
@@ -647,7 +647,8 @@ sub start_all_clusters
     opendir(my $dh, $dir) || return;
     while (readdir($dh))
     {
-        if ($_ =~ /data\d*/){
+        if ($_ =~ /data\d*/)
+        {
             my $id = $_;
             $id =~ s/data//;
             $id = 0 if $id eq '';
@@ -680,7 +681,8 @@ sub stop_all_clusters
     opendir(my $dh, $dir) || return;
     while (readdir($dh))
     {
-        if ($_ =~ /data\d*/){
+        if ($_ =~ /data\d*/)
+        {
             my $id = $_;
             $id =~ s/data//;
             $id = 0 if $id eq '';
@@ -695,7 +697,7 @@ sub git_update
     system_or_die ("cd ${git_local_repo} && git pull");
 }
 
-# La conf est dans un fichier à la .ini. Normalement /usr/local/etc/postgres_manage.conf, 
+# La conf est dans un fichier à la .ini. Normalement /usr/local/etc/postgres_manage.conf,
 # ou ~/.postgres_manage.conf ou pointée par la variable d'env
 # postgres_manage, et sinon, passée en ligne de commande. Les priorités sont évidemment ligne de commande avant environnement
 # avant rep par défaut
@@ -726,7 +728,7 @@ sub charge_conf
         }
     }
 
-    unless (defined $conf_file) 
+    unless (defined $conf_file)
     {
         die "Pas de fichier de configuration trouvé, ni passé en ligne de commande (-conf), ni dans \$postgres_manage,\nni dans " . $ENV{HOME} . "/.postgres_manage.conf, ni dans /usr/local/etc/.postgres_manage.conf\n";
     }
@@ -753,6 +755,7 @@ sub charge_conf
     }
     close CONF;
 }
+
 GetOptions ("version=s" => \$version,
         "mode=s" => \$mode,
         "conf_file=s" => \$conf_file,)
