@@ -128,8 +128,8 @@ sub compare_versions
 {
     my ($version1,$version2)=@_;
     # Cas de sortie:
-    return 1 if ($version1 eq 'dev');
-    return -1 if ($version2 eq 'dev');
+    return 1 if ($version1 eq 'dev' or $version1 eq 'review');
+    return -1 if ($version2 eq 'dev' or $version2 eq 'review');
     # 9.3 et 9.3.0 c'est pareil. On commence par ça
     if ($version1 =~ /^\d+\.\d+$/)
     {
@@ -499,7 +499,7 @@ sub rebuild_latest
         # Le nom des olddirs va ressembler à /home/marc/postgres/postgresql-9.3.0
         foreach my $olddir(@olddirs)
         {
-            next if $olddir =~ /dev$/;
+            next if ($olddir =~ /dev$/ or $olddir =~ /review$/);
             $olddir=~ /(\d+\.\d+\.\d+)$/ or die "Nom de dir bizarre: $olddir\n";
             my $oldversion=$1;
             if (compare_versions($oldversion,$version)==0)
@@ -557,7 +557,7 @@ sub env
         die;
     }
     # on retourne une erreur ici si le numéro de version n'est pas reconnu
-    unless ($version =~ /^(\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?$/)
+    unless ($version =~ /^((\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|(dev|review)$/)
     {
         print STDERR "Version incompréhensible: <$version>\n";
         die;
