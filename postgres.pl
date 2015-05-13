@@ -238,6 +238,7 @@ sub get_pgdata
 
 sub get_pgport
 {
+    my ($version, $clusterid) = @_;
     return unpack('n',pack('B15','0'.substr(unpack('B128',md5($version.$clusterid)),0,15))) + 1025;
 }
 
@@ -439,17 +440,42 @@ sub build_postgis
 
 sub list
 {
+    print "Instance         Esclave?\n";
+    print "-------------------------\n";
     my @list=<$work_dir/postgresql-*/>;
-    my @retour;
-    foreach my $elt (sort @list)
+    foreach my $ver (sort @list)
     {
         my $basename_rep_git=basename($git_local_repo); # Il va souvent être dans le même répertoire. Il faut l'ignorer
-        next if ($elt =~ /$basename_rep_git/);
-        $elt=~/postgresql-(.*)\/$/;
-        push @retour,($1);
+        next if ($ver =~ /$basename_rep_git/);
+        $ver =~ /postgresql-(.*)\/$/;
+        my $cur = $1;
+        my @list2 = <$work_dir/postgresql-$cur/data*>;
+        my $nb = 0;
+        foreach my $inst (sort @list2)
+        {
+            $inst =~ /data(\d*)$/;
+            my $id = $1;
+            $id = 0 if ($id eq '');
+            printf "%-17s", "$cur/$id";
+            if (-f "$inst/recovery.conf")
+            {
+                print "Oui";
+            }
+            else
+            {
+                print "Non";
+            }
+            print "\n";
+            $nb++;
+        }
+        if ($nb == 0)
+        {
+            printf "%-17s", "$cur";
+            print "-\n";
+            }
     }
-    return (\@retour);
 }
+
 sub list_avail
 {
     chdir ("$git_local_repo") or die "Il n'y a pas de répertoire $git_local_repo\nClones en un à coup de git clone git://git.postgresql.org/git/postgresql.git";
@@ -540,6 +566,60 @@ sub clean
         system_or_die("find $dest -mindepth 1 -maxdepth 1 -type d -path '*data*' -prune -o -exec rm -rf {} \\;");
     }
 }
+
+sub cluster_exists
+{
+    my ($version, $clusterid) = @_;
+    my $dir = dest_dir($version);
+    my $pgdata = get_pgdata($dir, $clusterid);
+
+    return 0 if (not -d $pgdata);
+    return 1;
+}
+#
+# Cette fonction créé un nouvel esclave à partir d'un cluster existant.
+# Un recovery.conf sera automatiquement généré avec une connexion en SR.
+# Les version 8.4- ne sont pas supportées.
+sub add_slave
+{
+    my ($version, $clusterid) = @_;
+
+    if (compare_versions($version, '9.0') == -1)
+    {
+    die "Seuls les esclaves en S/R sont supportés.";
+    }
+    die "L'instance $version/$clusterid n'existe pas !" if not cluster_exists($version, $clusterid);
+
+    my $newclusterid = $clusterid;
+    my $ok = 0;
+    while (not $ok)
+    {
+        $newclusterid++;
+        $ok = 1 if (not cluster_exists($version, $newclusterid));
+    }
+    print "L'esclave sera $version/$newclusterid\n";
+
+    # Arrêt du serveur source
+    stop_one_cluster($version,$clusterid);
+
+    print "Copie des données...\n";
+    my $dir = dest_dir($version);
+    my $pgdata_src = get_pgdata($dir,$clusterid);
+    my $pgdata_dst = get_pgdata($dir,$newclusterid);
+    my $pgport = get_pgport($version, $clusterid);
+    system_or_die("cp -R $pgdata_src $pgdata_dst");
+    system_or_die("find $pgdata_dst/pg_xlog/ -type f -delete");
+
+    print "Génération du recovery.conf\n";
+    my $recovery = "$pgdata_dst/recovery.conf";
+    open RECOVERY_CONF, "> $recovery" or die "Impossible de créer $recovery: $!";
+    print RECOVERY_CONF "standby_mode = 'on'\n";
+    print RECOVERY_CONF "primary_conninfo = 'host=127.0.0.1 port=$pgport'\n";
+    close RECOVERY_CONF;
+
+    print "Esclave $version/$newclusterid prêt !"
+}
+
 #
 # Cette fonction ne fait qu'afficher le shell à exécuter
 # On ne peut évidemment pas modifier l'environnement du shell appelant directement en perl
@@ -594,7 +674,7 @@ sub env
     print "export pgversion=$version\n";
     print "export pgclusterid=$clusterid\n";
     # Génération d'un numéro de port à partir d'un hash de la version et du n° de cluster
-    my $pgport=get_pgport();
+    my $pgport=get_pgport($version, $clusterid);
     print "export PGPORT=$pgport\n";
 }
 
@@ -603,7 +683,7 @@ sub start_one_cluster
     my ($version,$clusterid)=@_;
     my $dir=dest_dir($version);
     $ENV{LANG}="en_GB.utf8";
-    print "Starting cluster $version/$clusterid...\n";
+    print "Démarrage du cluster $version/$clusterid...\n";
     unless (-f "$dir/bin/pg_ctl")
     {
         die "Pas de binaire $dir/bin/pg_ctl\n";
@@ -667,7 +747,7 @@ sub stop_one_cluster
     }
     my $dir=dest_dir($version);
     my $pgdata=get_pgdata($dir, $clusterid);
-    print "Stopping cluster $version/$clusterid...\n";
+    print "Arrêt de l'instance $version/$clusterid...\n";
     return 1 unless (-e "$pgdata/postmaster.pid"); #pg_ctl aime pas qu'on lui demande d'éteindre une instance éteinte
     $ENV{PGDATA}=$pgdata;
     system("$dir/bin/pg_ctl -w -m $mode stop");
@@ -756,10 +836,13 @@ sub charge_conf
     close CONF;
 }
 
-GetOptions ("version=s" => \$version,
-        "mode=s" => \$mode,
-        "conf_file=s" => \$conf_file,)
-         or die("Error in command line arguments\n");
+
+GetOptions (
+    "version=s"     => \$version,
+    "mode=s"        => \$mode,
+    "conf_file=s"   => \$conf_file
+)
+or die("Error in command line arguments\n");
 
 if (not defined $version and (not defined $mode or $mode !~ /list|rebuild_latest|git_update/))
 {
@@ -826,9 +909,13 @@ elsif ($mode eq 'clean')
     # on supprime aussi les données
     clean($version, 1);
 }
+elsif ($mode eq 'slave')
+{
+    add_slave($version, $clusterid);
+}
 elsif ($mode eq 'list')
 {
-    print join("\n",@{list()}),"\n";
+    list();
 }
 elsif ($mode eq 'list_avail')
 {

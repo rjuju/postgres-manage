@@ -13,23 +13,23 @@ exemple de bashrc:
 function pg()
 {
     source <(/home/marc/postgres/postgres.pl -version $1 -mode env)
-#       `/home/marc/postgres/postgres.pl -mode env -version $1`
 }
 
-
-alias pgstart="/home/marc/postgres/postgres.pl -mode start"
-alias pgstartall="/home/marc/postgres/postgres.pl -mode startall"
-alias pgstop="/home/marc/postgres/postgres.pl -mode stop"
-alias pgstopall="/home/marc/postgres/postgres.pl -mode stopall"
-alias pgbuild="/home/marc/postgres/postgres.pl -mode build"
-alias pgbuildpostgis="/home/marc/postgres/postgres.pl -mode build_postgis"
-alias pgclean="/home/marc/postgres/postgres.pl -mode clean"
-alias pgls="/home/marc/postgres/postgres.pl -mode list"
-alias pglsavail="/home/marc/postgres/postgres.pl -mode list_avail"
-alias pglslatest="/home/marc/postgres/postgres.pl -mode list_latest"
-alias pgrebuild="/home/marc/postgres/postgres.pl -mode rebuild_latest"
-alias pggitupdate="/home/marc/postgres/postgres.pl -mode git_update"
-alias pgdoxy="/home/marc/postgres/postgres.pl -mode doxy"
+export PGMANAGE="/home/marc/postgres/postgres.pl"
+alias pgstart="$PGMANAGE -mode start"
+alias pgstartall="$PGMANAGE -mode startall"
+alias pgstop="$PGMANAGE -mode stop"
+alias pgstopall="$PGMANAGE -mode stopall"
+alias pgbuild="$PGMANAGE -mode build"
+alias pgbuildpostgis="$PGMANAGE -mode build_postgis"
+alias pgclean="$PGMANAGE -mode clean"
+alias pgls="$PGMANAGE -mode list"
+alias pglsavail="$PGMANAGE -mode list_avail"
+alias pglslatest="$PGMANAGE -mode list_latest"
+alias pgrebuild="$PGMANAGE -mode rebuild_latest"
+alias pggitupdate="$PGMANAGE -mode git_update"
+alias pgdoxy="$PGMANAGE -mode doxy"
+alias pgslave="$PGMANAGE --mode slave"
 # Juste là à titre d'exemple
 #export PGSUPARGS='-c fsync=off'
 export PGHOST=/tmp
