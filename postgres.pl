@@ -440,8 +440,8 @@ sub build_postgis
 
 sub list
 {
-    print "Instance         Esclave?\n";
-    print "-------------------------\n";
+    print "  Instance     Port Esclave?\n";
+    print "-----------------------------\n";
     my @list=<$work_dir/postgresql-*/>;
     foreach my $ver (sort @list)
     {
@@ -456,7 +456,17 @@ sub list
             $inst =~ /data(\d*)$/;
             my $id = $1;
             $id = 0 if ($id eq '');
-            printf "%-17s", "$cur/$id";
+            my $port = get_pgport($cur, $id);
+            if (-f "$inst/postmaster.pid")
+            {
+                printf "*"
+            }
+            else {
+                printf " "
+            }
+            printf " ";
+            printf "%-12s", "$cur/$id";
+            printf "%5s ", get_pgport($cur, $id);
             if (-f "$inst/recovery.conf")
             {
                 print "Oui";
@@ -470,9 +480,10 @@ sub list
         }
         if ($nb == 0)
         {
-            printf "%-17s", "$cur";
-            print "-\n";
-            }
+            printf "  %-16s", "$cur";
+            printf "%-5s", "-";
+            print "\n";
+        }
     }
 }
 
