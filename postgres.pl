@@ -625,7 +625,7 @@ sub add_slave
     my $recovery = "$pgdata_dst/recovery.conf";
     open RECOVERY_CONF, "> $recovery" or die "Impossible de créer $recovery: $!";
     print RECOVERY_CONF "standby_mode = 'on'\n";
-    print RECOVERY_CONF "primary_conninfo = 'host=127.0.0.1 port=$pgport'\n";
+    print RECOVERY_CONF "primary_conninfo = 'host=127.0.0.1 port=$pgport application_name=\"$version/$newclusterid\"'\n";
     close RECOVERY_CONF;
 
     print "Esclave $version/$newclusterid prêt !"
