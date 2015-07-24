@@ -27,6 +27,10 @@ my $clusterid;
 my $mode;
 my $configopt='';
 
+# C'est pas à nous de nous emmerder avec les warnings
+$ENV{CFLAGS}="-Wno-error";
+$ENV{CXXFLAGS}="-Wno-error";
+
 # Hash utilisé pour décider quelles versions utiliser par rapport à une version de PG
 my %postgis_version=(
     '9.2' => {  'geos'   => 'geos-3.3.9',
