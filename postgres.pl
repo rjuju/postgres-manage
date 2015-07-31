@@ -708,15 +708,15 @@ sub start_one_cluster
     my $args;
     if (compare_versions($version,'8.2')==-1) # Plus vieille qu'une 8.2
     {
-        $args="-c wal_sync_method=fdatasync -c shared_buffers=128000 -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=32";
+        $args="-c wal_sync_method=fdatasync -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=32";
     }
     elsif (compare_versions($version, "9.5") >= 0)
     {
-        $args="-c wal_sync_method=fdatasync -c shared_buffers=1GB -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=512MB -c max_wal_size=1500MB";
+        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=512MB -c max_wal_size=1500MB";
     }
     else
     {
-        $args="-c wal_sync_method=fdatasync -c shared_buffers=1GB -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32";
+        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32";
     }
     if (defined ($ENV{PGSUPARGS}))
     {

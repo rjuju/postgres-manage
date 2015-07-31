@@ -20,6 +20,8 @@ alias pgstart="$PGMANAGE -mode start"
 alias pgstartall="$PGMANAGE -mode startall"
 alias pgstop="$PGMANAGE -mode stop"
 alias pgstopall="$PGMANAGE -mode stopall"
+alias pgrestart="pgstop;pgstart"
+alias pgrestartall="pgstopall;pgstartall"
 alias pgbuild="$PGMANAGE -mode build"
 alias pgbuildpostgis="$PGMANAGE -mode build_postgis"
 alias pgclean="$PGMANAGE -mode clean"
@@ -31,6 +33,6 @@ alias pggitupdate="$PGMANAGE -mode git_update"
 alias pgdoxy="$PGMANAGE -mode doxy"
 alias pgslave="$PGMANAGE --mode slave"
 # Juste là à titre d'exemple
-#export PGSUPARGS='-c fsync=off'
+#export PGSUPARGS='-c fsync=off -c shared_buffers=1GB'
 export PGHOST=/tmp
 
