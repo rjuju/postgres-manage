@@ -17,6 +17,7 @@ our $git_local_repo;
 our $doxy_file;
 our $CC;
 our $CFLAGS;
+our $min_version='9.0';
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 
@@ -555,8 +556,8 @@ sub rebuild_latest
                 clean($olddir, 0);
             }
         }
-        # Seulement les versions >= 8.4 (versions supportées)
-        unless ($deja_compile or compare_versions($version,'8.4.0')==-1)
+        # Seulement les versions >= $min_version (versions supportées)
+        unless ($deja_compile or compare_versions($version,$min_version)==-1)
         {
             print "Compilation de $version.\n";
             build($version);
