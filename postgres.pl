@@ -18,6 +18,7 @@ our $doxy_file;
 our $CC;
 our $CFLAGS;
 our $min_version='9.0';
+our $show_commit=0;
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 
@@ -291,6 +292,12 @@ sub build
     system_or_die("git config --bool core.bare false");
     system_or_die("git reset --hard");
     system_or_die("git checkout $tag"); # à tester pour le head
+    # ajout de l'info @commit si demandé
+    if ($show_commit)
+    {
+        my $commit = system_or_die("git show HEAD --abbrev-commit --stat|head -n1|cut -d' ' -f2");
+        $configopt .= " --with-extra-version=@" . @{$commit}[0];
+    }
     system_or_die("rm -rf .git"); # On se moque des infos git maintenant
 #   system_or_die ("cp -rf ${git_local_repo}/../xlogdump ${dest}/src/contrib/");
     special_case_compile($tobuild);
