@@ -200,6 +200,7 @@ sub version_to_REL
         $rel=~ s/\./_/g;
         $rel=~ s/^/origin\/REL/;
         $rel=~ s/_dev$/_STABLE/;
+        $rel=~ s/_stable$/_STABLE/;
         return $rel;
     }
     $rel=~ s/\./_/g;
