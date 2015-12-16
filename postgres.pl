@@ -123,7 +123,7 @@ sub calcule_mineur
     {
         $score=300+$1;
     }
-    elsif ($mineur =~ /^dev$/)
+    elsif ($mineur =~ /^dev|stable$/)
     {
             $score=400;
     }
@@ -194,7 +194,7 @@ sub version_to_REL
     {
         return 'master';
     }
-    elsif ($version =~ /(\d+\.\d+)\.dev$/)
+    elsif ($version =~ /(\d+\.\d+)\.(dev|stable)$/)
     {
         # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
         $rel=~ s/\./_/g;
