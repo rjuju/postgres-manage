@@ -673,7 +673,7 @@ sub env
         die;
     }
     # on retourne une erreur ici si le numéro de version n'est pas reconnu
-    unless ($version =~ /^((\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|(dev|review)$/)
+    unless ($version =~ /^(((\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|(dev|review))$/)
     {
         print STDERR "Version incompréhensible: <$version>\n";
         die;
