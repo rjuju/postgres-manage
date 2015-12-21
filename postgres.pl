@@ -19,6 +19,7 @@ our $CC;
 our $CFLAGS;
 our $min_version='9.0';
 our $show_commit=0;
+our $make_check=1;
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 
@@ -279,6 +280,7 @@ sub build
     # construction du configure
     $configopt="--prefix=$dest $CONFIGOPTS";
     my $tag=version_to_REL($tobuild);
+    my $check = "";
     # on garde les données
     clean($tobuild, 0);
     mkdir ("${dest}");
@@ -304,7 +306,11 @@ sub build
     special_case_compile($tobuild);
     print "./configure $configopt\n";
     system_or_die("./configure $configopt");
-    system_or_die("nice -19 make -j${parallelisme} && make check && make install && cd contrib && make -j3 && make install");
+    if ($make_check)
+    {
+        $check = " && make check ";
+    }
+    system_or_die("nice -19 make -j${parallelisme} $check && make install && cd contrib && make -j3 && make install");
 }
 
 # Fonction générique de compilation.

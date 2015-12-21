@@ -3,6 +3,8 @@ work_dir=/home/marc/postgres
 git_local_repo=/home/marc/postgres/postgresql-git
 doxy_file=/home/marc/postgres/Doxyfile
 min_version=9.1 # Version minimum pour laquelle compiler
+# if you don't want to run the regression tests
+# make_check=0
 # If you don't want the default build environment
 # CC=
 # CFLAGS=
