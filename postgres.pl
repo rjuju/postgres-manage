@@ -72,9 +72,15 @@ my %postgis_version=(
                 'gdal'   =>'gdal-1.9.2',
                 'postgis'=>'postgis-1.3.2',
     },
+    'HEAD.' => {'geos'   => 'geos-3.4.2',
+                'proj'   =>'proj-4.9.1',
+                'jsonc'  =>'json-c-0.12-20140410',
+                'gdal'   =>'gdal-2.0.1',
+                'postgis'=>'postgis-2.1.8',
+    },
 );
 
-# Hash utilisé pour donner la correspondance entre une regexp de nom de fichier à télécharger et son URL
+# Hash utilisé pour donner la correspondance entre une regexp de nom de fichier à télécharger et son URL
 # Les fonctions anonymes sont volontairement compactes :)
 # Si ça devient trop chiant, à la place, faudra retourner une liste d'URL candidates, et toutes les tester.
 # Les règles de rangement sur ces projets, c'est n'importe quoi
@@ -98,6 +104,8 @@ my %tar_to_url=(
 sub majeur_mineur
 {
     my ($version)=@_;
+    return ("HEAD", "", "") if $version eq "dev";
+
     $version=~ /^(\d+)\.(\d+)(?:\.(.+))?$/ or die "Version bizarre $version dans majeur_mineur\n";
     return ($1,$2,$3);
 }
