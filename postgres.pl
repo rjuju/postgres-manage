@@ -20,6 +20,9 @@ our $CFLAGS;
 our $min_version='9.0';
 our $show_commit=0;
 our $make_check=1;
+our $checkpoint_segments=32;
+our $min_wal_size="512MB";
+our $max_wal_size="1500MB";
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 
@@ -737,15 +740,15 @@ sub start_one_cluster
     my $args;
     if (compare_versions($version,'8.2')==-1) # Plus vieille qu'une 8.2
     {
-        $args="-c wal_sync_method=fdatasync -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=32";
+        $args="-c wal_sync_method=fdatasync -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=${checkpoint_segments}";
     }
     elsif (compare_versions($version, "9.5") >= 0)
     {
-        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=512MB -c max_wal_size=1500MB";
+        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=${max_wal_size} -c max_wal_size=${max_wal_size}";
     }
     else
     {
-        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32";
+        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=${checkpoint_segments}";
     }
     if (defined ($ENV{PGSUPARGS}))
     {

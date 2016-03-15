@@ -5,6 +5,10 @@ doxy_file=/home/marc/postgres/Doxyfile
 min_version=9.1 # Version minimum pour laquelle compiler
 # if you don't want to run the regression tests
 # make_check=0
+# if you want to overload checkpoint_segments, or (min|max)_wal_size
+# checkpoint_segments=64
+# min_wal_size=512MB
+# max_wal_size=1500MB
 # If you don't want the default build environment
 # CC=
 # CFLAGS=
