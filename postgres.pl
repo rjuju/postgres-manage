@@ -744,7 +744,7 @@ sub start_one_cluster
     }
     elsif (compare_versions($version, "9.5") >= 0)
     {
-        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=${max_wal_size} -c max_wal_size=${max_wal_size}";
+        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=${min_wal_size} -c max_wal_size=${max_wal_size}";
     }
     else
     {
