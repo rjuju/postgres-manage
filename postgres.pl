@@ -20,6 +20,9 @@ our $CFLAGS;
 our $min_version='9.0';
 our $show_commit=0;
 our $make_check=1;
+our $checkpoint_segments=32;
+our $min_wal_size="512MB";
+our $max_wal_size="1500MB";
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 
@@ -36,17 +39,28 @@ $ENV{CXXFLAGS}="-Wno-error";
 
 # Hash utilisé pour décider quelles versions utiliser par rapport à une version de PG
 my %postgis_version=(
-    '9.2' => {  'geos'   => 'geos-3.3.9',
-                'proj'   =>'proj-4.8.0',
-                'jsonc'  =>'json-c-0.9',
+    '8.2' => {  'geos'   => 'geos-3.3.9',
+                'proj'   =>'proj-4.5.0',
                 'gdal'   =>'gdal-1.9.2',
-                'postgis'=>'postgis-2.0.4',
+                'postgis'=>'postgis-1.3.2',
     },
     '9.1' => {  'geos'   => 'geos-3.3.9',
                 'proj'   =>'proj-4.8.0',
                 'jsonc'  =>'json-c-0.9',
                 'gdal'   =>'gdal-1.9.2',
                 'postgis'=>'postgis-2.0.4',
+    },
+    '9.2' => {  'geos'   => 'geos-3.3.9',
+                'proj'   =>'proj-4.8.0',
+                'jsonc'  =>'json-c-0.9',
+                'gdal'   =>'gdal-1.9.2',
+                'postgis'=>'postgis-2.0.4',
+    },
+    '9.3' => {  'geos'   => 'geos-3.4.2',
+                'proj'   =>'proj-4.9.1',
+                'jsonc'  =>'json-c-0.12',
+                'gdal'   =>'gdal-1.11.2',
+                'postgis'=>'postgis-2.1.0',
     },
     '9.4' => {  'geos'   => 'geos-3.4.2',
                 'proj'   =>'proj-4.9.1',
@@ -59,17 +73,6 @@ my %postgis_version=(
                 'jsonc'  =>'json-c-0.12-20140410',
                 'gdal'   =>'gdal-2.0.0',
                 'postgis'=>'postgis-2.2.1',
-    },
-    '9.3' => {  'geos'   => 'geos-3.4.2',
-                'proj'   =>'proj-4.9.1',
-                'jsonc'  =>'json-c-0.12',
-                'gdal'   =>'gdal-1.11.2',
-                'postgis'=>'postgis-2.1.0',
-    },
-    '8.2' => {  'geos'   => 'geos-3.3.9',
-                'proj'   =>'proj-4.5.0',
-                'gdal'   =>'gdal-1.9.2',
-                'postgis'=>'postgis-1.3.2',
     },
     'HEAD.' => {'geos'   => 'geos-3.4.2',
                 'proj'   =>'proj-4.9.1',
@@ -737,15 +740,15 @@ sub start_one_cluster
     my $args;
     if (compare_versions($version,'8.2')==-1) # Plus vieille qu'une 8.2
     {
-        $args="-c wal_sync_method=fdatasync -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=32";
+        $args="-c wal_sync_method=fdatasync -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=${checkpoint_segments}";
     }
     elsif (compare_versions($version, "9.5") >= 0)
     {
-        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=512MB -c max_wal_size=1500MB";
+        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c min_wal_size=${min_wal_size} -c max_wal_size=${max_wal_size}";
     }
     else
     {
-        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=32";
+        $args="-c wal_sync_method=fdatasync -c work_mem=32MB -c maintenance_work_mem=1GB -c checkpoint_segments=${checkpoint_segments}";
     }
     if (defined ($ENV{PGSUPARGS}))
     {
