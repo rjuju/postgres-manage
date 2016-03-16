@@ -25,6 +25,7 @@ our $min_wal_size="512MB";
 our $max_wal_size="1500MB";
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
+our $help=0;
 
 my $conf_file;
 
@@ -141,7 +142,7 @@ sub calcule_mineur
     }
     else
     {
-        die "Mineur non prévu\n";
+        usage( "Mineur non prévu\n");
     }
     return $score;
 }
@@ -676,18 +677,18 @@ sub env
     unless ($version)
     {
         print STDERR "Hé, j'ai besoin d'un numero de version\n";
-        die;
+        usage();
     }
     if (not defined $clusterid)
     {
         print STDERR "Hé, j'ai besoin d'un numero de cluster\n";
-        die;
+        usage();
     }
     # on retourne une erreur ici si le numéro de version n'est pas reconnu
     unless ($version =~ /^(((\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|(dev|review))$/)
     {
         print STDERR "Version incompréhensible: <$version>\n";
-        die;
+        usage();
     }
     # On nettoie le path des anciennes versions, au cas où
     my $oldpath=$ENV{PATH};
@@ -883,13 +884,38 @@ sub charge_conf
     close CONF;
 }
 
+sub usage
+{
+	print STDERR "$_[0]\n" if ($_[0]);
+	print STDERR "$0 -mode MODE [--version x.y.z] [--conf_file chemin_vers_conf]\n";
+	print STDERR "MODE peut être:\n";
+	print STDERR "                  env\n";
+	print STDERR "                  build\n";
+	print STDERR "                  build_postgis\n";
+	print STDERR "                  start\n";
+	print STDERR "                  startall\n";
+	print STDERR "                  stop\n";
+	print STDERR "                  stopall\n";
+	print STDERR "                  clean\n";
+	print STDERR "                  slave\n";
+	print STDERR "                  list\n";
+	print STDERR "                  list_avail\n";
+	print STDERR "                  list_latest\n";
+	print STDERR "                  rebuild_latest\n";
+	print STDERR "                  git_update\n";
+	print STDERR "                  doxy\n";
+	exit 1;
+}
 
 GetOptions (
     "version=s"     => \$version,
     "mode=s"        => \$mode,
-    "conf_file=s"   => \$conf_file
+    "conf_file=s"   => \$conf_file,
+    "help"          => \$help,
 )
-or die("Error in command line arguments\n");
+or usage("Error in command line arguments\n");
+
+usage() if ($help);
 
 if (not defined $version and (not defined $mode or $mode !~ /list|rebuild_latest|git_update/))
 {
@@ -899,7 +925,7 @@ if (not defined $version and (not defined $mode or $mode !~ /list|rebuild_latest
     }
     else
     {
-        die "Il me faut une version (option -version, ou bien variable d'env pgversion\n";
+        usage( "Il me faut une version (option -version, ou bien variable d'env pgversion\n");
     }
     if (defined $ENV{pgclusterid})
     {
@@ -921,7 +947,7 @@ charge_conf();
 # Bon j'aurais pu jouer avec des pointeurs sur fonction. Mais j'ai la flemme
 if (not defined $mode)
 {
-    die "Il me faut un mode d'execution: option -mode, valeurs: env,....\n";
+    usage("Il me faut un mode d'execution: option -mode, valeurs: env,....\n");
 }
 elsif ($mode eq 'env')
 {
@@ -986,5 +1012,5 @@ elsif ($mode eq 'doxy')
 }
 else
 {
-    die "Mode $mode inconnu\n";
+    usage("Mode $mode inconnu\n");
 }
