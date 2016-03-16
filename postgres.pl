@@ -58,7 +58,7 @@ my %postgis_version=(
                 'proj'   =>'proj-4.9.1',
                 'jsonc'  =>'json-c-0.12-20140410',
                 'gdal'   =>'gdal-2.0.0',
-                'postgis'=>'postgis-2.1.7',
+                'postgis'=>'postgis-2.2.1',
     },
     '9.3' => {  'geos'   => 'geos-3.4.2',
                 'proj'   =>'proj-4.9.1',
