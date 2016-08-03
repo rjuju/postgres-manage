@@ -482,8 +482,7 @@ sub list
     my @list=<$work_dir/postgresql-*/>;
     foreach my $ver (sort @list)
     {
-        my $basename_rep_git=basename($git_local_repo); # Il va souvent être dans le même répertoire. Il faut l'ignorer
-        next if ($ver =~ /$basename_rep_git/);
+	next if ($ver =~ /^$git_local_repo\/?$/);
         $ver =~ /postgresql-(.*)\/$/;
         my $cur = $1;
         my @list2 = <$work_dir/postgresql-$cur/data*>;
