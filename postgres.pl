@@ -872,7 +872,7 @@ sub charge_conf
         next if ($line =~ /^$/); # On saute les lignes vides après commentaires
         $line =~ s/\s*=\s*/=/; # Suppression des blancs autour du =
         # On peut maintenant traiter le reste avec une expression régulière simple :)
-        $line =~ /(\S+)=(.*)/ or die "Ligne de conf bizarre: <$line_orig>\n";
+        $line =~ /(\S+?)=(.*)/ or die "Ligne de conf bizarre: <$line_orig>\n";
         my $param_name=$1; my $param_value=$2;
         ${$param_name}=$param_value; # référence symbolique, par paresse.
     }
