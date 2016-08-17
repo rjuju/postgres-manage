@@ -573,6 +573,7 @@ sub rebuild_latest
         foreach my $olddir(@olddirs)
         {
             next if ($olddir =~ /dev$/ or $olddir =~ /review$/);
+	    next unless (-d $olddir);
             $olddir=~ /(\d+\.\d+\.\d+)$/ or die "Nom de dir bizarre: $olddir\n";
             my $oldversion=$1;
             if (compare_versions($oldversion,$version)==0)
