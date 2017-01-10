@@ -17,6 +17,7 @@ our $git_local_repo;
 our $doxy_file;
 our $CC;
 our $CFLAGS;
+our $CXXFLAGS;
 our $min_version='9.0';
 our $show_commit=0;
 our $make_check=1;
@@ -26,6 +27,7 @@ our $max_wal_size="1500MB";
 our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande qui va être réellement passée à configure)
 our $help=0;
+our $tar_mode=0; # Doit on compiler à partir du git ou d'un tar ?
 
 my $conf_file;
 
@@ -34,9 +36,7 @@ my $clusterid;
 my $mode;
 my $configopt='';
 
-# C'est pas à nous de nous emmerder avec les warnings
-$ENV{CFLAGS}="-Wno-error";
-$ENV{CXXFLAGS}="-Wno-error";
+
 
 # Hash utilisé pour décider quelles versions utiliser par rapport à une version de PG
 my %postgis_version=(
@@ -107,6 +107,10 @@ my %tar_to_url=(
     'proj' => sub { return ("http://download.osgeo.org/proj/" . $_[0])},
     'geos' => sub { return ("http://download.osgeo.org/geos/" . $_[0])},
     'postgis' => sub { return ("http://download.osgeo.org/postgis/source/" . $_[0])},
+    'postgres' => sub { $_[0] =~ /postgresql-(.+?)\.tar\.bz2/;
+                    my $version=$1;
+                    return ("https://ftp.postgresql.org/pub/source/v" . $version . "/postgresql-" . $version. ".tar.bz2")
+                  },
 );
 
 
@@ -305,21 +309,34 @@ sub build
     # le mkdir du répertoire est facultatif, il a pu être conservé par le clean
     # si ce n'est pas le premier build de cette version
     die "Cannot mkdir ${dest} : $!\n" if (not -d ${dest});
-    chdir "${dest}" or die "Cannot chdir ${dest} : $!\n";
-    mkdir ("src") or die "Cannot mkdir src : $!\n";
-    mkdir ("src/.git") or die "Cannot mkdir src/.git : $!\n";
-    system_or_die("git clone --mirror ${git_local_repo} src/.git");
-    chdir "src" or die "Cannot chdir src : $!\n";
-    system_or_die("git config --bool core.bare false");
-    system_or_die("git reset --hard");
-    system_or_die("git checkout $tag"); # à tester pour le head
-    # ajout de l'info @commit si demandé
-    if ($show_commit)
+    if (not $tar_mode)
     {
-        my $commit = system_or_die("git show HEAD --abbrev-commit --stat|head -n1|cut -d' ' -f2");
-        $configopt .= " --with-extra-version=@" . @{$commit}[0];
+	chdir "${dest}" or die "Cannot chdir ${dest} : $!\n";
+	mkdir ("src") or die "Cannot mkdir src : $!\n";
+	mkdir ("src/.git") or die "Cannot mkdir src/.git : $!\n";
+	system_or_die("git clone --mirror ${git_local_repo} src/.git");
+	chdir "src" or die "Cannot chdir src : $!\n";
+	system_or_die("git config --bool core.bare false");
+	system_or_die("git reset --hard");
+	system_or_die("git checkout $tag"); # à tester pour le head
+	# ajout de l'info @commit si demandé
+	if ($show_commit)
+	{
+	    my $commit = system_or_die("git show HEAD --abbrev-commit --stat|head -n1|cut -d' ' -f2");
+	    $configopt .= " --with-extra-version=@" . @{$commit}[0];
+	}
+	system_or_die("rm -rf .git"); # On se moque des infos git maintenant
     }
-    system_or_die("rm -rf .git"); # On se moque des infos git maintenant
+    else
+    {
+	# Build from tar
+	#
+	my $tar_postgres="postgresql-" . $tobuild . ".tar.bz2";
+	try_download($tar_postgres,"postgres_versions");
+	mkdir ("$dest/src");
+	system_or_die("nice -19 tar -xvf $work_dir/postgres_versions/$tar_postgres -C $dest/src/  --strip-components=1");
+	chdir "${dest}/src" or die "Cannot chdir ${dest}/src : $!\n";
+    }
 #   system_or_die ("cp -rf ${git_local_repo}/../xlogdump ${dest}/src/contrib/");
     special_case_compile($tobuild);
     print "./configure $configopt\n";
@@ -336,7 +353,7 @@ sub build_something
 {
     my ($tar,@commands)=@_;
     # Some files may not have been downloaded. Try to get them
-    try_download($tar) if ((! -f $tar) or (-z $tar));
+    try_download($tar,"postgis") if ((! -f $tar) or (-z $tar));
     print "Décompression de $tar\n";
     my $retour_tar=system_or_die("tar xvf $tar",1); # 1 = mute, on veut aps voir le tar à l'écran
     # On va prendre la première ligne pour savoir dans quel répertoire ça a décompressé (y a le projet json-c où ils sont niais :) )
@@ -355,7 +372,7 @@ sub build_something
 # We'll use regexps to guess what we are trying to download :)
 sub try_download
 {
-    my ($file)=@_;
+    my ($file,$dest)=@_;
     # Recherche de l'entrée de %tar_to_url qui corresponde (regexp)
     my $url;
     my $found=0;
@@ -366,12 +383,12 @@ sub try_download
        $url=&{$subref}($file);
     }
     die "Impossible de trouver l'URL de $file" unless ($found);
-    unlink ("$work_dir/postgis/$file"); # On essaye de supprimer l'ancien avant. Normalement, y a pas
-    print "Téléchargement de $file : wget $url -O $work_dir/postgis/$file\n";
-    system("wget $url -O $work_dir/postgis/$file");
+    mkdir("$work_dir/$dest");
+    print "Téléchargement de $file : wget -c $url -O $work_dir/$dest/$file\n";
+    system("wget -c $url -O $work_dir/$dest/$file");
     unless ($? >>8 == 0)
     {
-        move ("$work_dir/postgis/$file","$work_dir/postgis/$file.failed");
+        move ("$work_dir/$dest/$file","$work_dir/$dest/$file.failed");
         die "Cannot download $file";
     }
 }
@@ -887,13 +904,16 @@ sub charge_conf
     {
         $CONFIGOPTS='--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug --with-ossp-uuid';#Valeur par défaut
     }
+    # C'est pas à nous de nous emmerder avec les warnings
+    $CFLAGS.=" -w";
+    $CXXFLAGS.=" -w";
     close CONF;
 }
 
 sub usage
 {
 	print STDERR "$_[0]\n" if ($_[0]);
-	print STDERR "$0 -mode MODE [--version x.y.z] [--conf_file chemin_vers_conf]\n";
+	print STDERR "$0 -mode MODE [--version x.y.z] [--conf_file chemin_vers_conf] [--tar_mode]\n";
 	print STDERR "MODE peut être:\n";
 	print STDERR "                  env\n";
 	print STDERR "                  build\n";
@@ -917,6 +937,7 @@ GetOptions (
     "version=s"     => \$version,
     "mode=s"        => \$mode,
     "conf_file=s"   => \$conf_file,
+    "tar_mode"	    => \$tar_mode,
     "help"          => \$help,
 )
 or usage("Error in command line arguments\n");
