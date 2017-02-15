@@ -18,7 +18,7 @@ our $doxy_file;
 our $CC;
 our $CFLAGS;
 our $CXXFLAGS;
-our $min_version='9.0';
+our $min_version='9.2';
 our $show_commit=0;
 our $make_check=1;
 our $checkpoint_segments=32;
