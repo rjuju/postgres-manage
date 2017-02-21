@@ -278,10 +278,8 @@ sub get_pgport
     return unpack('n',pack('B15','0'.substr(unpack('B128',md5($version.$clusterid)),0,15))) + 1025;
 }
 
-sub build
+sub setenv
 {
-    my ($tobuild)=@_;
-    my $dest=dest_dir($tobuild);
     # Options de compil par défaut
     if (not defined $CC)
     {
@@ -299,7 +297,13 @@ sub build
     {
         $ENV{CFLAGS}=$CFLAGS;
     }
-    # construction du configure
+ }
+
+sub build
+{
+    my ($tobuild)=@_;
+    my $dest=dest_dir($tobuild);
+   # construction du configure
     $configopt="--prefix=$dest $CONFIGOPTS";
     my $tag=version_to_REL($tobuild);
     my $check = "";
@@ -970,6 +974,7 @@ if (defined $version and $version =~ /^(.+)\/(\d+)$/)
 }
 
 charge_conf();
+setenv();
 
 # Bon j'aurais pu jouer avec des pointeurs sur fonction. Mais j'ai la flemme
 if (not defined $mode)
