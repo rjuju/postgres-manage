@@ -908,9 +908,6 @@ sub charge_conf
     {
         $CONFIGOPTS='--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug --with-ossp-uuid';#Valeur par défaut
     }
-    # C'est pas à nous de nous emmerder avec les warnings
-    $CFLAGS.=" -w";
-    $CXXFLAGS.=" -w";
     close CONF;
 }
 
