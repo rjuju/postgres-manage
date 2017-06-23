@@ -683,7 +683,11 @@ sub add_slave
     my $pgdata_dst = get_pgdata($dir,$newclusterid);
     my $pgport = get_pgport($version, $clusterid);
     system_or_die("cp -R $pgdata_src $pgdata_dst");
-    system_or_die("find $pgdata_dst/pg_xlog/ -type f -delete");
+    if (compare_versions($version, '9.6') <= 0) {
+        system_or_die("find $pgdata_dst/pg_xlog/ -type f -delete");
+    } else {
+        system_or_die("find $pgdata_dst/pg_wal/ -type f -delete");
+    }
 
     print "Génération du recovery.conf\n";
     my $recovery = "$pgdata_dst/recovery.conf";
