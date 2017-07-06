@@ -116,10 +116,27 @@ my %tar_to_url=(
 
 sub majeur_mineur
 {
-    my ($version)=@_;
+    my ($version) = @_;
+
     return ("HEAD", "", "") if $version eq "dev";
 
-    $version=~ /^(\d+)\.(\d+)(?:\.(.+))?$/ or die "Version bizarre $version dans majeur_mineur\n";
+    # gestion du changement de numérotation depuis pg 10
+    $version =~ /^(\d+).*/
+            or die "Version bizarre $version dans majeur_mineur\n";
+
+    # c'est au moins pg10, le numéro de version ne contient que deux digits
+    if ($1 >= 10) {
+        $version =~ /^(\d+)(?:\.(.+))?$/
+            or die "Version bizarre $version dans majeur_mineur\n";
+
+        # Pour les versions 10+, on ajoute un faux deuxième digit de version à
+        # 0 pour éviter de compliquer le code partout ailleurs.
+        return ($1, 0, $2);
+    }
+
+    # Version inférieure à pg10, on calcule les 3 chiffres de version
+    $version =~ /^(\d+)\.(\d+)(?:\.(.+))?$/
+        or die "Version bizarre $version dans majeur_mineur\n";
     return ($1,$2,$3);
 }
 
@@ -165,26 +182,32 @@ sub compare_versions
     # Cas de sortie:
     return 1 if ($version1 eq 'dev' or $version1 eq 'review');
     return -1 if ($version2 eq 'dev' or $version2 eq 'review');
+
     # 9.3 et 9.3.0 c'est pareil. On commence par ça
     if ($version1 =~ /^\d+\.\d+$/)
     {
         $version1=$version1 . ".0";
     }
+
     if ($version2 =~ /^\d+\.\d+$/)
     {
         $version2=$version2 . ".0";
     }
+
     # On commence par comparer les majeurs. Ça suffit la plupart du temps
-    my ($majeur11,$majeur21,$mineur1)=majeur_mineur($version1);
-    my ($majeur12,$majeur22,$mineur2)=majeur_mineur($version2);
+    my ($majeur11,$majeur21,$mineur1) = majeur_mineur($version1);
+    my ($majeur12,$majeur22,$mineur2) = majeur_mineur($version2);
+
     if ($majeur11<=>$majeur12)
     {
         return $majeur11<=>$majeur12;
     }
+
     if ($majeur21<=>$majeur22)
     {
         return $majeur21<=>$majeur22;
     }
+
     # Fin du cas simple :)
     # Maintenant, si les mineurs sont juste des numériques, c'est facile. Sinon, il faut prendre en compte que
     # dev>rc>beta>alpha. Pour rendre la comparaison simple, alpha=0, beta=100, rc=200, final=300, dev (head de la branche)=400.
@@ -663,6 +686,7 @@ sub add_slave
     {
     die "Seuls les esclaves en S/R sont supportés.";
     }
+
     die "L'instance $version/$clusterid n'existe pas !" if not cluster_exists($version, $clusterid);
 
     my $newclusterid = $clusterid;
