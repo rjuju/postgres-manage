@@ -249,6 +249,27 @@ sub version_to_REL
         $rel=~ s/_stable$/_STABLE/;
         return $rel;
     }
+    elsif ($version =~ /(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+))$/)
+    {
+        # Version >10 sans tag, il faut prendre _STABLE
+        $rel=~ s/\./_/g;
+        $rel=~ s/beta/BETA/g;
+        $rel=~ s/alpha/ALPHA/g;
+        $rel=~ s/rc/RC/g;
+        $rel="REL_" . $rel;
+        return $rel;
+    }
+    elsif ($version =~ /((\d+)\.|(dev|stable))$/)
+    {
+        # Version >10 sans tag, il faut prendre _STABLEi
+        $rel=~ s/\./_/g;
+        $rel=~ s/beta/BETA/g;
+        $rel=~ s/alpha/ALPHA/g;
+        $rel=~ s/rc/RC/g;
+        $rel="REL_" . $rel;
+        return $rel;
+    }
+
     $rel=~ s/\./_/g;
     $rel=~ s/beta/BETA/g;
     $rel=~ s/alpha/ALPHA/g;
@@ -740,7 +761,8 @@ sub env
         usage();
     }
     # on retourne une erreur ici si le numéro de version n'est pas reconnu
-    unless ($version =~ /^(((\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|(dev|review))$/)
+    unless ($version =~ /^(((\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|((\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|(dev|review))$/)
+    #                      ^ version sur 3 digit                                 ^ version sur 2 digit (après la 10)            ^ master
     {
         print STDERR "Version incompréhensible: <$version>\n";
         usage();
