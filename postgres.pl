@@ -240,7 +240,7 @@ sub version_to_REL
     {
         return 'master';
     }
-    elsif ($version =~ /(\d+\.\d+)\.(dev|stable)$/)
+    elsif ($version =~ /^(\d+\.\d+)\.(dev|stable)$/)
     {
         # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
         $rel=~ s/\./_/g;
@@ -249,7 +249,7 @@ sub version_to_REL
         $rel=~ s/_stable$/_STABLE/;
         return $rel;
     }
-    elsif ($version =~ /(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+))$/)
+    elsif ($version =~ /^(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+))$/)
     {
         # Version >10
         $rel=~ s/\./_/g;
@@ -259,7 +259,7 @@ sub version_to_REL
         $rel="REL_" . $rel;
         return $rel;
     }
-    elsif ($version =~ /((\d+)\.|(dev|stable))$/)
+    elsif ($version =~ /^((\d+)\.|(dev|stable))$/)
     {
         # Version >10 sans tag, il faut prendre _STABLE
         $rel=~ s/\./_/g;
