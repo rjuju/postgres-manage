@@ -236,6 +236,7 @@ sub version_to_REL
 {
     my ($version)=@_;
     my $rel=$version;
+
     if  ($version =~ /^dev$|^review$/)
     {
         return 'master';
@@ -249,9 +250,19 @@ sub version_to_REL
         $rel=~ s/_stable$/_STABLE/;
         return $rel;
     }
-    elsif ($version =~ /^(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+))$/)
+    elsif ($version =~ /^(\d+)\.(\d+)\.(alpha|beta|rc)(\d+)$/)
     {
-        # Version >10
+        # Version <10
+        $rel=~ s/\./_/g;
+        $rel=~ s/beta/BETA/g;
+        $rel=~ s/alpha/ALPHA/g;
+        $rel=~ s/rc/RC/g;
+        $rel="REL" . $rel;
+        return $rel;
+    }
+    elsif ($version =~ /^(\d+)\.(alpha|beta|rc)(\d+)$/)
+    {
+        # Version >=10
         $rel=~ s/\./_/g;
         $rel=~ s/beta/BETA/g;
         $rel=~ s/alpha/ALPHA/g;
@@ -259,13 +270,13 @@ sub version_to_REL
         $rel="REL_" . $rel;
         return $rel;
     }
-    elsif ($version =~ /^((\d+)\.|(dev|stable))$/)
+    elsif ($version =~ /^((\d+)\.(dev|stable))$/)
     {
-        # Version >10 sans tag, il faut prendre _STABLE
+        # Version >=10 sans tag, il faut prendre _STABLE
         $rel=~ s/\./_/g;
+        $rel=~ s/^/origin\/REL_/;
         $rel=~ s/_dev$/_STABLE/;
         $rel=~ s/_stable$/_STABLE/;
-        $rel="REL_" . $rel;
         return $rel;
     }
 
