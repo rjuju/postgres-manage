@@ -657,9 +657,9 @@ sub rebuild_latest
             }
             else
             {
-                print "Suppression de la version obsolete $oldversion.\n";
+                print "Suppression de la version obsolete $oldversion. (sauf rep data)\n";
                 # on conserve les répertoire $PGDATA cependant
-                clean($olddir, 0);
+                clean($oldversion, 0);
             }
         }
         # Seulement les versions >= $min_version (versions supportées)
@@ -676,6 +676,7 @@ sub clean
     my ($version, $remove_data)=@_;
     $remove_data = 0 if not defined $remove_data;
     my $dest=dest_dir($version);
+    croak unless (defined $dest and $dest ne '');
     stop_all_clusters($version,'immediate'); # Si ça ne réussit pas, tant pis
     if ($remove_data)
     {
@@ -686,6 +687,8 @@ sub clean
         return if (not -d $dest);
         # on conserve les données
         system_or_die("find $dest -mindepth 1 -maxdepth 1 -type d -path '*data*' -prune -o -exec rm -rf {} \\;");
+	# Si le répertoire est vide, on le vire quand même
+	rmdir($dest);
     }
 }
 
