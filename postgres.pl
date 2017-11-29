@@ -4,7 +4,7 @@ use File::Basename;
 use Data::Dumper;
 use Digest::MD5 qw(md5);
 use File::Copy;
-
+use Carp;
 
 use strict;
 
@@ -117,26 +117,15 @@ my %tar_to_url=(
 sub majeur_mineur
 {
     my ($version) = @_;
-
     return ("HEAD", "", "") if $version eq "dev";
 
     # gestion du changement de numérotation depuis pg 10
     $version =~ /^(\d+).*/
-            or die "Version bizarre $version dans majeur_mineur\n";
+            or croak "Version bizarre $version dans majeur_mineur\n";
 
-    # c'est au moins pg10, le numéro de version ne contient que deux digits
-    if ($1 >= 10) {
-        $version =~ /^(\d+)(?:\.(.+))?$/
-            or die "Version bizarre $version dans majeur_mineur\n";
-
-        # Pour les versions 10+, on ajoute un faux deuxième digit de version à
-        # 0 pour éviter de compliquer le code partout ailleurs.
-        return ($1, 0, $2);
-    }
-
-    # Version inférieure à pg10, on calcule les 3 chiffres de version
+    # on calcule les 3 chiffres de version
     $version =~ /^(\d+)\.(\d+)(?:\.(.+))?$/
-        or die "Version bizarre $version dans majeur_mineur\n";
+        or croak "Version bizarre $version dans majeur_mineur\n";
     return ($1,$2,$3);
 }
 
@@ -169,7 +158,7 @@ sub calcule_mineur
     }
     else
     {
-        usage( "Mineur non prévu\n");
+        croak( "Mineur non prévu\n");
     }
     return $score;
 }
@@ -183,15 +172,22 @@ sub compare_versions
     return 1 if ($version1 eq 'dev' or $version1 eq 'review');
     return -1 if ($version2 eq 'dev' or $version2 eq 'review');
 
-    # 9.3 et 9.3.0 c'est pareil. On commence par ça
-    if ($version1 =~ /^\d+\.\d+$/)
+    foreach my $version ($version1,$version2)
     {
-        $version1=$version1 . ".0";
+        next unless ($version =~ /^(\d+)\.\d+$/);
+	if ($1 >= 10)
+	{
+	    $version=~ s/^(\d+)\.(\d+)$/$1.0.$2/;
+	}
     }
 
-    if ($version2 =~ /^\d+\.\d+$/)
+    # 9.3 et 9.3.0 c'est pareil. On commence par ça. On a traité le cas de 10 et supérieur avant
+    foreach my $version ($version1,$version2)
     {
-        $version2=$version2 . ".0";
+        if ($version =~ /^\d+\.\d+$/)
+        {
+            $version.= ".0";
+        }
     }
 
     # On commence par comparer les majeurs. Ça suffit la plupart du temps
@@ -236,56 +232,48 @@ sub version_to_REL
 {
     my ($version)=@_;
     my $rel=$version;
+    my $tag_header;
+
 
     if  ($version =~ /^dev$|^review$/)
     {
         return 'master';
     }
-    elsif ($version =~ /^(\d+\.\d+)\.(dev|stable)$/)
+    # On n'a plus que des versions commençant par du numérique
+    $version =~ /^(\d+)/ or croak "Version bizarre $version";
+    if ($1 < 10)
+    {
+        $tag_header='REL'
+    }
+    else
+    {
+        $tag_header='REL_'
+    }
+    if ($version =~ /^([0-9.])\.(dev|stable)$/)
     {
         # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
         $rel=~ s/\./_/g;
-        $rel=~ s/^/origin\/REL/;
+        $rel=~ s/^/origin\/$tag_header/;
         $rel=~ s/_dev$/_STABLE/;
         $rel=~ s/_stable$/_STABLE/;
         return $rel;
     }
-    elsif ($version =~ /^(\d+)\.(\d+)\.(alpha|beta|rc)(\d+)$/)
+    elsif ($version =~ /^([0-9.])\.(alpha|beta|rc)(\d+)$/)
     {
         # Version <10
         $rel=~ s/\./_/g;
         $rel=~ s/beta/BETA/g;
         $rel=~ s/alpha/ALPHA/g;
         $rel=~ s/rc/RC/g;
-        $rel="REL" . $rel;
+        $rel=$tag_header . $rel;
         return $rel;
     }
-    elsif ($version =~ /^(\d+)\.(alpha|beta|rc)(\d+)$/)
+    else
     {
-        # Version >=10
         $rel=~ s/\./_/g;
-        $rel=~ s/beta/BETA/g;
-        $rel=~ s/alpha/ALPHA/g;
-        $rel=~ s/rc/RC/g;
-        $rel="REL_" . $rel;
+        $rel=$tag_header . $rel;
         return $rel;
     }
-    elsif ($version =~ /^((\d+)\.(dev|stable))$/)
-    {
-        # Version >=10 sans tag, il faut prendre _STABLE
-        $rel=~ s/\./_/g;
-        $rel=~ s/^/origin\/REL_/;
-        $rel=~ s/_dev$/_STABLE/;
-        $rel=~ s/_stable$/_STABLE/;
-        return $rel;
-    }
-
-    $rel=~ s/\./_/g;
-    $rel=~ s/beta/BETA/g;
-    $rel=~ s/alpha/ALPHA/g;
-    $rel=~ s/rc/RC/g;
-    $rel="REL" . $rel;
-    return $rel;
 }
 
 # Pour éviter d'avoir des die partout dans le code
@@ -616,6 +604,8 @@ sub list_avail
         next if ($version =~ /RC|BETA|ALPHA/);
         $version =~ s/^REL//g;
         $version =~ s/_/./g;
+	# à partir de la 10, c'est REL_10_1 et plus REL9_6_5, donc on se retrouve avec un point au debut… à virer
+	$version =~ s/^\.//;
         push @retour, ($version)
     }
     return(\@retour);
