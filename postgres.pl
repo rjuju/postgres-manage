@@ -122,11 +122,30 @@ sub majeur_mineur
     # gestion du changement de numérotation depuis pg 10
     $version =~ /^(\d+).*/
             or croak "Version bizarre $version dans majeur_mineur\n";
+    my $majeur1=$1;
 
-    # on calcule les 3 chiffres de version
-    $version =~ /^(\d+)\.(\d+)(?:\.(.+))?$/
-        or croak "Version bizarre $version dans majeur_mineur\n";
-    return ($1,$2,$3);
+    # on calcule les 3 chiffres de version, si on nous a donné trois chiffres, pas la peine d'aller chercher plus loin
+    if ($version =~ /^(\d+)\.(\d+)\.(.+)$/)
+    {
+        return ($1,$2,$3);
+    }
+    if ($majeur1 < 10)
+    {
+	if ($version =~ /^(\d+)\.(\d+)$/) # Ça a existé pour des vieilles version (6.2 par exemple, c'est comme une 6.2.0)
+	{
+	    return ($1,$2,0);
+	}
+	else
+	{
+            croak "Version bizarre $version dans majeur_mineur\n";
+	}
+    }
+    else
+    {
+        $version =~ /^(\d+)\.(\d+)$/
+		or croak "Version bizarre $version dans majeur_mineur\n";
+	return ($1,0,$2);
+    }
 }
 
 sub calcule_mineur
@@ -171,24 +190,6 @@ sub compare_versions
     # Cas de sortie:
     return 1 if ($version1 eq 'dev' or $version1 eq 'review');
     return -1 if ($version2 eq 'dev' or $version2 eq 'review');
-
-    foreach my $version ($version1,$version2)
-    {
-        next unless ($version =~ /^(\d+)\.\d+$/);
-	if ($1 >= 10)
-	{
-	    $version=~ s/^(\d+)\.(\d+)$/$1.0.$2/;
-	}
-    }
-
-    # 9.3 et 9.3.0 c'est pareil. On commence par ça. On a traité le cas de 10 et supérieur avant
-    foreach my $version ($version1,$version2)
-    {
-        if ($version =~ /^\d+\.\d+$/)
-        {
-            $version.= ".0";
-        }
-    }
 
     # On commence par comparer les majeurs. Ça suffit la plupart du temps
     my ($majeur11,$majeur21,$mineur1) = majeur_mineur($version1);
@@ -303,7 +304,9 @@ sub system_or_die
 sub dest_dir
 {
     my ($version)=@_;
-    return("${work_dir}/postgresql-${version}");
+    my ($majeur1,$majeur2,$mineur)=majeur_mineur($version);
+    my $versiondir="$majeur1.$majeur2.$mineur";
+    return("${work_dir}/postgresql-${versiondir}");
 }
 
 sub get_pgdata
@@ -619,8 +622,8 @@ sub ls_latest
     my @retour;
     foreach my $version(sort {compare_versions($a,$b) } @$refversions)
     {
-        $version=~/^(\d+\.\d+)/;
-        my $majeur=$1;
+        my ($majeur1,$majeur2)=majeur_mineur($version);
+        my $majeur="$majeur1.$majeur2";
         if ($prevmajeur and ($majeur ne $prevmajeur))
         {
             push @retour, ($prevversion);
