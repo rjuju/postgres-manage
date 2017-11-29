@@ -250,7 +250,7 @@ sub version_to_REL
     {
         $tag_header='REL_'
     }
-    if ($version =~ /^([0-9.])\.(dev|stable)$/)
+    if ($version =~ /^([0-9.]+)\.(dev|stable)$/)
     {
         # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
         $rel=~ s/\./_/g;
@@ -259,7 +259,7 @@ sub version_to_REL
         $rel=~ s/_stable$/_STABLE/;
         return $rel;
     }
-    elsif ($version =~ /^([0-9.])\.(alpha|beta|rc)(\d+)$/)
+    elsif ($version =~ /^([0-9.]+)\.(alpha|beta|rc)(\d+)$/)
     {
         # Version <10
         $rel=~ s/\./_/g;
