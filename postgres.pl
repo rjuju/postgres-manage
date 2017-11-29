@@ -4,7 +4,7 @@ use File::Basename;
 use Data::Dumper;
 use Digest::MD5 qw(md5);
 use File::Copy;
-
+use Carp;
 
 use strict;
 
@@ -117,27 +117,35 @@ my %tar_to_url=(
 sub majeur_mineur
 {
     my ($version) = @_;
-
     return ("HEAD", "", "") if $version eq "dev";
 
     # gestion du changement de numérotation depuis pg 10
     $version =~ /^(\d+).*/
-            or die "Version bizarre $version dans majeur_mineur\n";
+            or croak "Version bizarre $version dans majeur_mineur\n";
+    my $majeur1=$1;
 
-    # c'est au moins pg10, le numéro de version ne contient que deux digits
-    if ($1 >= 10) {
-        $version =~ /^(\d+)(?:\.(.+))?$/
-            or die "Version bizarre $version dans majeur_mineur\n";
-
-        # Pour les versions 10+, on ajoute un faux deuxième digit de version à
-        # 0 pour éviter de compliquer le code partout ailleurs.
-        return ($1, 0, $2);
+    # on calcule les 3 chiffres de version, si on nous a donné trois chiffres, pas la peine d'aller chercher plus loin
+    if ($version =~ /^(\d+)\.(\d+)\.(.+)$/)
+    {
+        return ($1,$2,$3);
     }
-
-    # Version inférieure à pg10, on calcule les 3 chiffres de version
-    $version =~ /^(\d+)\.(\d+)(?:\.(.+))?$/
-        or die "Version bizarre $version dans majeur_mineur\n";
-    return ($1,$2,$3);
+    if ($majeur1 < 10)
+    {
+	if ($version =~ /^(\d+)\.(\d+)$/) # Ça a existé pour des vieilles version (6.2 par exemple, c'est comme une 6.2.0)
+	{
+	    return ($1,$2,0);
+	}
+	else
+	{
+            croak "Version bizarre $version dans majeur_mineur\n";
+	}
+    }
+    else
+    {
+        $version =~ /^(\d+)\.(\d+)$/
+		or croak "Version bizarre $version dans majeur_mineur\n";
+	return ($1,0,$2);
+    }
 }
 
 sub calcule_mineur
@@ -169,7 +177,7 @@ sub calcule_mineur
     }
     else
     {
-        usage( "Mineur non prévu\n");
+        croak( "Mineur non prévu\n");
     }
     return $score;
 }
@@ -182,17 +190,6 @@ sub compare_versions
     # Cas de sortie:
     return 1 if ($version1 eq 'dev' or $version1 eq 'review');
     return -1 if ($version2 eq 'dev' or $version2 eq 'review');
-
-    # 9.3 et 9.3.0 c'est pareil. On commence par ça
-    if ($version1 =~ /^\d+\.\d+$/)
-    {
-        $version1=$version1 . ".0";
-    }
-
-    if ($version2 =~ /^\d+\.\d+$/)
-    {
-        $version2=$version2 . ".0";
-    }
 
     # On commence par comparer les majeurs. Ça suffit la plupart du temps
     my ($majeur11,$majeur21,$mineur1) = majeur_mineur($version1);
@@ -236,56 +233,48 @@ sub version_to_REL
 {
     my ($version)=@_;
     my $rel=$version;
+    my $tag_header;
+
 
     if  ($version =~ /^dev$|^review$/)
     {
         return 'master';
     }
-    elsif ($version =~ /^(\d+\.\d+)\.(dev|stable)$/)
+    # On n'a plus que des versions commençant par du numérique
+    $version =~ /^(\d+)/ or croak "Version bizarre $version";
+    if ($1 < 10)
+    {
+        $tag_header='REL'
+    }
+    else
+    {
+        $tag_header='REL_'
+    }
+    if ($version =~ /^([0-9.]+)\.(dev|stable)$/)
     {
         # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE par exemple
         $rel=~ s/\./_/g;
-        $rel=~ s/^/origin\/REL/;
+        $rel=~ s/^/origin\/$tag_header/;
         $rel=~ s/_dev$/_STABLE/;
         $rel=~ s/_stable$/_STABLE/;
         return $rel;
     }
-    elsif ($version =~ /^(\d+)\.(\d+)\.(alpha|beta|rc)(\d+)$/)
+    elsif ($version =~ /^([0-9.]+)\.(alpha|beta|rc)(\d+)$/)
     {
         # Version <10
         $rel=~ s/\./_/g;
         $rel=~ s/beta/BETA/g;
         $rel=~ s/alpha/ALPHA/g;
         $rel=~ s/rc/RC/g;
-        $rel="REL" . $rel;
+        $rel=$tag_header . $rel;
         return $rel;
     }
-    elsif ($version =~ /^(\d+)\.(alpha|beta|rc)(\d+)$/)
+    else
     {
-        # Version >=10
         $rel=~ s/\./_/g;
-        $rel=~ s/beta/BETA/g;
-        $rel=~ s/alpha/ALPHA/g;
-        $rel=~ s/rc/RC/g;
-        $rel="REL_" . $rel;
+        $rel=$tag_header . $rel;
         return $rel;
     }
-    elsif ($version =~ /^((\d+)\.(dev|stable))$/)
-    {
-        # Version >=10 sans tag, il faut prendre _STABLE
-        $rel=~ s/\./_/g;
-        $rel=~ s/^/origin\/REL_/;
-        $rel=~ s/_dev$/_STABLE/;
-        $rel=~ s/_stable$/_STABLE/;
-        return $rel;
-    }
-
-    $rel=~ s/\./_/g;
-    $rel=~ s/beta/BETA/g;
-    $rel=~ s/alpha/ALPHA/g;
-    $rel=~ s/rc/RC/g;
-    $rel="REL" . $rel;
-    return $rel;
 }
 
 # Pour éviter d'avoir des die partout dans le code
@@ -315,7 +304,9 @@ sub system_or_die
 sub dest_dir
 {
     my ($version)=@_;
-    return("${work_dir}/postgresql-${version}");
+    my ($majeur1,$majeur2,$mineur)=majeur_mineur($version);
+    my $versiondir="$majeur1.$majeur2.$mineur";
+    return("${work_dir}/postgresql-${versiondir}");
 }
 
 sub get_pgdata
@@ -616,6 +607,8 @@ sub list_avail
         next if ($version =~ /RC|BETA|ALPHA/);
         $version =~ s/^REL//g;
         $version =~ s/_/./g;
+	# à partir de la 10, c'est REL_10_1 et plus REL9_6_5, donc on se retrouve avec un point au debut… à virer
+	$version =~ s/^\.//;
         push @retour, ($version)
     }
     return(\@retour);
@@ -629,8 +622,8 @@ sub ls_latest
     my @retour;
     foreach my $version(sort {compare_versions($a,$b) } @$refversions)
     {
-        $version=~/^(\d+\.\d+)/;
-        my $majeur=$1;
+        my ($majeur1,$majeur2)=majeur_mineur($version);
+        my $majeur="$majeur1.$majeur2";
         if ($prevmajeur and ($majeur ne $prevmajeur))
         {
             push @retour, ($prevversion);
@@ -664,9 +657,9 @@ sub rebuild_latest
             }
             else
             {
-                print "Suppression de la version obsolete $oldversion.\n";
+                print "Suppression de la version obsolete $oldversion. (sauf rep data)\n";
                 # on conserve les répertoire $PGDATA cependant
-                clean($olddir, 0);
+                clean($oldversion, 0);
             }
         }
         # Seulement les versions >= $min_version (versions supportées)
@@ -683,6 +676,7 @@ sub clean
     my ($version, $remove_data)=@_;
     $remove_data = 0 if not defined $remove_data;
     my $dest=dest_dir($version);
+    croak unless (defined $dest and $dest ne '');
     stop_all_clusters($version,'immediate'); # Si ça ne réussit pas, tant pis
     if ($remove_data)
     {
@@ -693,6 +687,8 @@ sub clean
         return if (not -d $dest);
         # on conserve les données
         system_or_die("find $dest -mindepth 1 -maxdepth 1 -type d -path '*data*' -prune -o -exec rm -rf {} \\;");
+	# Si le répertoire est vide, on le vire quand même
+	rmdir($dest);
     }
 }
 
