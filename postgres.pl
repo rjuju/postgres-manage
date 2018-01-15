@@ -578,24 +578,27 @@ sub build_postgis
 
 sub list
 {
+    my @versions = <$work_dir/postgresql-*/>;
+
     print "  Instance     Port Esclave?\n";
     print "-----------------------------\n";
-    my @list=<$work_dir/postgresql-*/>;
-    foreach my $ver (sort @list)
-    {
-        next if ($ver =~ /^$git_local_repo\/?$/);
 
-        $ver =~ /postgresql-(.*)\/$/;
-        my $cur = $1;
-        my @list2 = <$work_dir/postgresql-$cur/data*>;
+    @versions = grep {$_ !~ /^$git_local_repo\/?$/} @versions;
+    for(@versions){
+        s/.*postgresql-(.*)\/$/$1/;
+    }
+
+    foreach my $ver (sort {compare_versions($a, $b)} @versions)
+    {
+        my @instances = <$work_dir/postgresql-$ver/data*>;
         my $nb = 0;
 
-        foreach my $inst (sort @list2)
+        foreach my $inst (sort @instances)
         {
             $inst =~ /data(\d*)$/;
             my $id = $1;
             $id = 0 if ($id eq '');
-            my $port = get_pgport($cur, $id);
+            my $port = get_pgport($ver, $id);
             if (-f "$inst/postmaster.pid")
             {
                 printf "*"
@@ -605,8 +608,8 @@ sub list
             }
 
             printf " ";
-            printf "%-12s", "$cur/$id";
-            printf "%5s ", get_pgport($cur, $id);
+            printf "%-12s", "$ver/$id";
+            printf "%5s ", get_pgport($ver, $id);
 
             if (-f "$inst/recovery.conf")
             {
@@ -621,7 +624,7 @@ sub list
         }
         if ($nb == 0)
         {
-            printf "  %-16s", "$cur";
+            printf "  %-16s", "$ver";
             printf "%-5s", "-";
             print "\n";
         }
