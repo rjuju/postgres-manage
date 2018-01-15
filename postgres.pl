@@ -325,8 +325,17 @@ sub system_or_die
 sub dest_dir
 {
     my ($version)=@_;
-    my ($majeur1,$majeur2,$mineur)=majeur_mineur($version);
-    my $versiondir="$majeur1.$majeur2.$mineur";
+    my ($majeur1,$majeur2,$mineur) = majeur_mineur($version);
+    my $versiondir;
+
+    if ($majeur1 eq "HEAD"){
+        $versiondir="dev";
+    } elsif ($majeur1 < 10){
+        $versiondir="$majeur1.$majeur2.$mineur";
+    } else {
+        $versiondir="$majeur1.$majeur2";
+    }
+
     return("${work_dir}/postgresql-${versiondir}");
 }
 
