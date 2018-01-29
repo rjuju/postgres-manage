@@ -887,6 +887,11 @@ sub start_one_cluster
         system_or_die("$dir/bin/initdb");
         system_or_die("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
         system_or_die("$dir/bin/createdb"); # Pour avoir une base du nom du dba (/me grosse feignasse)
+        system_or_die("openssl req -new -text -out $pgdata/server.req -subj '/C=US/ST=New-York/L=New-York/O=OrgName/OU=IT Department/CN=example.com' -passout pass:toto");
+        system_or_die("openssl rsa -in privkey.pem -out $pgdata/server.key -passin pass:toto");
+        unlink ("privkey.pem");
+        system_or_die("openssl req -x509 -in $pgdata/server.req -text -key $pgdata/server.key -out $pgdata/server.crt");
+        system_or_die("chmod og-rwx $pgdata/server.key");
     }
     else
     {
