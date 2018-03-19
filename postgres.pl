@@ -8,10 +8,7 @@ use Carp;
 
 use strict;
 
-# Ces 3 sont en our pour pouvoir les manipuler par référence symbolique
-# (paresse quand tu nous tiens) Ça évite de stocker dans un hash, ou de devoir
-# faire une floppée de if dans la fonction de chargement de la conf
-our $parallelisme;
+our $parallelism;
 our $work_dir;
 our $git_local_repo;
 our $doxy_file;
@@ -24,12 +21,13 @@ our $make_check=1;
 our $checkpoint_segments=32;
 our $min_wal_size="512MB";
 our $max_wal_size="1500MB";
-our $CONFIGOPTS; # Ne pas confondre avec $configopt (la ligne de commande qui
-                 # va être réellement passée à configure)
-our $LD_LIBRARY_PATH; # Ne pas confondre avec $configopt (la ligne de commande
-                      # qui va être réellement passée à configure)
+our $CONFIGOPTS; # Do not mistake for $configopt (the command line that will be
+                 # passed to configure
+our $LD_LIBRARY_PATH;
+
 our $help=0;
-our $tar_mode=0; # Doit on compiler à partir du git ou d'un tar ?
+our $tar_mode=0; # Should we compile from git or a tar ? (useful when the flex/bison
+                 # files are no longer compatible with the flex/bison on the machine)
 
 my $conf_file;
 
@@ -38,9 +36,8 @@ my $clusterid;
 my $mode;
 my $configopt='';
 
-
-# Hash utilisé pour décider quelles versions utiliser par rapport à une version
-# de PG
+# Has used to determine what version should be used for a specific version
+# of PG
 my %postgis_version=(
     '8.2' => {  'geos'   => 'geos-3.3.9',
                 'proj'   =>'proj-4.5.0',
@@ -91,17 +88,16 @@ my %postgis_version=(
     },
 );
 
-# Hash utilisé pour donner la correspondance entre une regexp de nom de fichier
-# à télécharger et son URL Les fonctions anonymes sont volontairement compactes
-# :) Si ça devient trop chiant, à la place, faudra retourner une liste d'URL
-# candidates, et toutes les tester.  Les règles de rangement sur ces projets,
-# c'est n'importe quoi
+# The following has is used to get a correspondance between a regex on a filename
+# to be downloaded and its URL. The anonymous blocks are intended to be short
+# If this gets nasty, we'll return a candidate list of URLs and test them,
+# but this method has been working for a while.
 my %tar_to_url=(
     'json-c-\d+\.\d+-\d+\.tar\.gz' => sub { return ("https://github.com/json-c/json-c/archive/" . $_[0])},
     'json-c-\d+\.\d+\.tar\.gz' => sub { return ("https://github.com/downloads/json-c/json-c/" . $_[0])},
     'gdal' => sub { $_[0] =~ /gdal-(.+?)\.tar\.gz/;
                     my $version=$1;
-                    if (compare_versions($version,'1.10.2')>=0) # Le fichier est dans un sous-répertoire
+                    if (compare_versions($version,'1.10.2')>=0) # The file is in a subdirectory
                     {
                        return ("http://download.osgeo.org/gdal/" . $version . '/' . $_[0] )
                     }
@@ -117,54 +113,54 @@ my %tar_to_url=(
 );
 
 
-sub majeur_mineur
+sub major_minor
 {
     my ($version) = @_;
     return ("HEAD", "", "") if $version eq "dev";
 
-    # gestion du changement de numérotation depuis pg 10
+    # This is for the new numbering since pg 10
     $version =~ /^(\d+).*/
-            or croak "Version bizarre $version dans majeur_mineur\n";
-    my $majeur1=$1;
+            or croak "Weird version $version in major_minor\n";
+    my $major1=$1;
 
-    # on calcule les 3 chiffres de version, si on nous a donné trois chiffres, pas la peine d'aller chercher plus loin
+    # Lets calculate the 3 version numbers
+    # If we have been given 3 numbers, no point in going any further
     if ($version =~ /^(\d+)\.(\d+)\.(.+)$/)
     {
         return ($1,$2,$3);
     }
-    if ($majeur1 < 10)
+    if ($major1 < 10)
     {
-        # Ça a existé pour des vieilles version (6.2 par exemple, c'est comme
-        # une 6.2.0)
+        # This has existed for very old versions (such as 6.2)
         if ($version =~ /^(\d+)\.(\d+)$/)
         {
             return ($1,$2,0);
         }
         else
         {
-            croak "Version bizarre $version dans majeur_mineur\n";
+            croak "Weird version $version in major_minor\n";
         }
     }
     else
     {
         $version =~ /^(\d+)\.(\d+|dev)$/
-            or croak "Version bizarre $version dans majeur_mineur\n";
+            or croak "Weird version $version in major_minor\n";
         return ($1,$2);
     }
 }
 
-# Transforme un numéro de version mineure en "score" numérique, utilisanle dans
-# les fonctions de comparaison.
+# Transform a minor number into a numeric "score", to be used in comparison
+# functions
 # dev>rc>beta>alpha.
-# Pour rendre la comparaison simple, alpha=0, beta=100, rc=200, final=300, dev
-# (head de la branche)=400.
-# On les somme au numéro de version trouvé.
-sub calcule_mineur
+# To make the comparison simple,
+# alpha=0, beta=100, rc=200, final=300, dev (head of the branch)=400.
+# We add them to the version number found.
+sub calculate_minor
 {
-    my ($mineur)=@_;
+    my ($minor)=@_;
     my $score;
 
-    if ($mineur =~ /^(alpha|beta|rc)(\d+)$/)
+    if ($minor =~ /^(alpha|beta|rc)(\d+)$/)
     {
         if ($1 eq 'alpha')
         {
@@ -179,62 +175,57 @@ sub calcule_mineur
             $score=200+$2;
         }
     }
-    elsif ($mineur =~ /^(\d+)$/)
+    elsif ($minor =~ /^(\d+)$/)
     {
         $score=300+$1;
     }
-    elsif ($mineur =~ /^dev|stable$/)
+    elsif ($minor =~ /^dev|stable$/)
     {
             $score=400;
     }
     else
     {
-        croak("Mineur non prévu\n");
+        croak("Minor not expected\n");
     }
 
     return $score;
 }
 
-# Retourne comme cmp et <=> par rapport à 2 versions en paramètre
-# Accepte les formats 9.3, 9.3.9, 9.3.beta1
+# Behaves like cmp and <=>, but with two PG versions
+# Accepts formats such as 9.3, 9.3.9, 9.3.beta1
 sub compare_versions
 {
     my ($version1, $version2) = @_;
 
-    # Cas de sortie:
+    # early exits:
     return 1 if ($version1 eq 'dev' or $version1 eq 'review');
     return -1 if ($version2 eq 'dev' or $version2 eq 'review');
 
-    # On commence par comparer les majeurs. Ça suffit la plupart du temps
-    my ($majeur11, $majeur21, $mineur1) = majeur_mineur($version1);
-    my ($majeur12, $majeur22, $mineur2) = majeur_mineur($version2);
+    # Lets start by comparing majors
+    my ($major11, $major21, $minor1) = major_minor($version1);
+    my ($major12, $major22, $minor2) = major_minor($version2);
 
-    if ($majeur11<=>$majeur12)
+    if ($major11<=>$major12)
     {
-        return $majeur11<=>$majeur12;
+        return $major11<=>$major12;
     }
 
-    if ($majeur21<=>$majeur22)
+    if ($major21<=>$major22)
     {
-        return $majeur21<=>$majeur22;
+        return $major21<=>$major22;
     }
 
-    # Fin du cas simple :)
-    # Maintenant, si les mineurs sont juste des numériques, c'est facile.
-    # Sinon, il faut prendre en compte que dev>rc>beta>alpha. Pour rendre la
-    # comparaison simple, alpha=0, beta=100, rc=200, final=300, dev (head de la
-    # branche)=400.  On les somme au numéro de version trouvé. C'est ce que
-    # fait la fonction calcule_mineur
-    my $score1=calcule_mineur($mineur1);
-    my $score2=calcule_mineur($mineur2);
+    # Now for the minor
+    # If the minors are just numbers, that's easy. Else we have to compare
+    # dev, rc, beta,alpha...
+    my $score1=calculate_minor($minor1);
+    my $score2=calculate_minor($minor2);
     return $score1<=>$score2;
 }
 
-# Cette fonction rajoute des options de config pour les cas spéciaux (vieilles
-# versions avec pbs d'options de compil, etc Cette fonction utilise la fonction
-# de comparaisons de versions pour faire ses petites affaires.  On y change les
-# configopt au besoin, l'environnement (CC, CFLAGS…) Pour éviter les
-# optimisations qui empêchent l'initdb
+# This function adds configuration options for special cases (old versions
+# with compile problems). It's there for overriding the environment (CC, CFLAGS...)
+# For instance there are now problems with pre-9 version if -O is not 0...
 sub special_case_compile
 {
     my ($version)=@_;
@@ -245,7 +236,7 @@ sub special_case_compile
     return $configopt;
 }
 
-# Convertir une version en tag git
+# Convert a version into a git tag
 sub version_to_REL
 {
     my ($version)=@_;
@@ -257,10 +248,10 @@ sub version_to_REL
         return 'master';
     }
 
-    # On n'a plus que des versions commençant par du numérique
-    $version =~ /^(\d+)/ or croak "Version bizarre $version";
+    # We only have versions starting with numbers left
+    $version =~ /^(\d+)/ or croak "Weird version $version";
 
-    # changement de nommage des branches en version 10+
+    # The naming convention has changed with 10+ versions
     if ($1 < 10)
     {
         $tag_header='REL'
@@ -272,8 +263,7 @@ sub version_to_REL
 
     if ($version =~ /^([0-9.]+)\.(dev|stable)$/)
     {
-        # Cas particulier: pas de tag, faut aller chercher origin/REL9_0_STABLE
-        # par exemple
+        # Special case: no tag, we need to fetch something like origin/REL9_0_STABLE
         $rel=~ s/\./_/g;
         $rel=~ s/^/origin\/$tag_header/;
         $rel=~ s/_dev$/_STABLE/;
@@ -298,17 +288,17 @@ sub version_to_REL
     }
 }
 
-# Pour éviter d'avoir des die partout dans le code
-sub system_or_die
+# Try to avoid having confess all over the code
+sub system_or_confess
 {
     my ($command,$mute)=@_;
     $mute=0 unless defined($mute);
     my $fh;
-    my @retour;
-    open($fh,'-|',$command) or die "Impossible de lancer $command: $!";
+    my @return_value;
+    open($fh,'-|',$command) or confess "Cannot run $command: $!";
     while (my $line=<$fh>)
     {
-        push @retour,($line);
+        push @return_value,($line);
         unless ($mute)
         {
             print $line;
@@ -317,28 +307,30 @@ sub system_or_die
     close ($fh);
     if ($?>>8 != 0)
     {
-        die "Commande $command a echoué.\n";
+        confess "Command $command failed.\n";
     }
-    return \@retour; # Par référence, ça peut être gros sinon :)
+    return \@return_value; # By reference, this may be quite big
 }
 
+# Get the destination dir for a compiled version
 sub dest_dir
 {
     my ($version)=@_;
-    my ($majeur1,$majeur2,$mineur) = majeur_mineur($version);
+    my ($major1,$major2,$minor) = major_minor($version);
     my $versiondir;
 
-    if ($majeur1 eq "HEAD"){
+    if ($major1 eq "HEAD"){
         $versiondir="dev";
-    } elsif ($majeur1 < 10){
-        $versiondir="$majeur1.$majeur2.$mineur";
+    } elsif ($major1 < 10){
+        $versiondir="$major1.$major2.$minor";
     } else {
-        $versiondir="$majeur1.$majeur2";
+        $versiondir="$major1.$major2";
     }
 
     return("${work_dir}/postgresql-${versiondir}");
 }
 
+# Get the PGDATA for a version
 sub get_pgdata
 {
     my ($dir, $clusterid) = @_;
@@ -347,15 +339,18 @@ sub get_pgdata
     return "$dir/data$id";
 }
 
+# Calculate a PGPORT. We use the first 15 bits of the md5 of the version to get a port.
+# Conflict probability should stay very low unless people start running dozens of instances
 sub get_pgport
 {
     my ($version, $clusterid) = @_;
     return unpack('n',pack('B15','0'.substr(unpack('B128',md5($version.$clusterid)),0,15))) + 1025;
 }
 
+# Set environment variables from setup
 sub setenv
 {
-    # Options de compil par défaut
+    # Default compilation options
     if (not defined $CC)
     {
         undef $ENV{CC};
@@ -372,39 +367,40 @@ sub setenv
     {
         $ENV{CFLAGS}=$CFLAGS;
     }
- }
+}
 
+# Build a PostgreSQL version
 sub build
 {
     my ($tobuild)=@_;
     my $dest=dest_dir($tobuild);
-   # construction du configure
+    # Build the configure command line
     $configopt="--prefix=$dest $CONFIGOPTS";
     my $tag=version_to_REL($tobuild);
     my $check = "";
-    # on garde les données
+    # We keep data, just remove binaries
     clean($tobuild, 0);
     mkdir ("${dest}");
-    # le mkdir du répertoire est facultatif, il a pu être conservé par le clean
-    # si ce n'est pas le premier build de cette version
-    die "Cannot mkdir ${dest} : $!\n" if (not -d ${dest});
+    # The directory is probably still there if this is not the first build
+    # Let's just check it is there
+    confess "Cannot mkdir ${dest} : $!\n" if (not -d ${dest});
     if (not $tar_mode)
     {
-        chdir "${dest}" or die "Cannot chdir ${dest} : $!\n";
-        mkdir ("src") or die "Cannot mkdir src : $!\n";
-        mkdir ("src/.git") or die "Cannot mkdir src/.git : $!\n";
-        system_or_die("git clone --mirror ${git_local_repo} src/.git");
-        chdir "src" or die "Cannot chdir src : $!\n";
-        system_or_die("git config --bool core.bare false");
-        system_or_die("git reset --hard");
-        system_or_die("git checkout $tag"); # à tester pour le head
-        # ajout de l'info @commit si demandé
+        chdir "${dest}" or confess "Cannot chdir ${dest} : $!\n";
+        mkdir ("src") or confess "Cannot mkdir src : $!\n";
+        mkdir ("src/.git") or confess "Cannot mkdir src/.git : $!\n";
+        system_or_confess("git clone --mirror ${git_local_repo} src/.git");
+        chdir "src" or confess "Cannot chdir src : $!\n";
+        system_or_confess("git config --bool core.bare false");
+        system_or_confess("git reset --hard");
+        system_or_confess("git checkout $tag");
+        # If we've been asked, let's display the commit information
         if ($show_commit)
         {
-            my $commit = system_or_die("git show HEAD --abbrev-commit --stat|head -n1|cut -d' ' -f2");
+            my $commit = system_or_confess("git show HEAD --abbrev-commit --stat|head -n1|cut -d' ' -f2");
             $configopt .= " --with-extra-version=@" . @{$commit}[0];
         }
-        system_or_die("rm -rf .git"); # On se moque des infos git maintenant
+        system_or_confess("rm -rf .git"); # Get rid of git data, we don't need it now
     }
     else
     {
@@ -412,38 +408,37 @@ sub build
         my $tar_postgres="postgresql-" . $tobuild . ".tar.bz2";
         try_download($tar_postgres,"postgres_versions");
         mkdir ("$dest/src");
-        system_or_die("nice -19 tar -xvf $work_dir/postgres_versions/$tar_postgres -C $dest/src/  --strip-components=1");
-        chdir "${dest}/src" or die "Cannot chdir ${dest}/src : $!\n";
+        system_or_confess("nice -19 tar -xvf $work_dir/postgres_versions/$tar_postgres -C $dest/src/  --strip-components=1");
+        chdir "${dest}/src" or confess "Cannot chdir ${dest}/src : $!\n";
     }
-    #system_or_die ("cp -rf ${git_local_repo}/../xlogdump ${dest}/src/contrib/");
     special_case_compile($tobuild);
     print "./configure $configopt\n";
-    system_or_die("./configure $configopt");
+    system_or_confess("./configure $configopt");
     if ($make_check)
     {
         $check = " && make check ";
     }
-    system_or_die("nice -19 make -j${parallelisme} $check && make install && cd contrib && make -j3 && make install");
+    system_or_confess("nice -19 make -j${parallelism} $check && make install && cd contrib && make -j3 && make install");
 }
 
-# Fonction générique de compilation.
+# Generic build function. Mostly for postgis and its dependencies
 sub build_something
 {
     my ($tar,@commands)=@_;
     # Some files may not have been downloaded. Try to get them
     try_download($tar,"postgis") if ((! -f $tar) or (-z $tar));
     print "Décompression de $tar\n";
-    my $retour_tar=system_or_die("tar xvf $tar",1); # 1 = mute, on veut aps voir le tar à l'écran
-    # On va prendre la première ligne pour savoir dans quel répertoire ça a décompressé (y a le projet json-c où ils sont niais :) )
-    $retour_tar->[0] =~ /^(.*)\// or die "Impossible de trouver le répertoire de " . $retour_tar->[0];
+    my $return_value_tar=system_or_confess("tar xvf $tar",1); # 1 = mute, we don't care seeing the tar on screen
+    # We keep the first line to know where this tar has decompressed. json-c is not typical on this
+    $return_value_tar->[0] =~ /^(.*)\// or confess "Cannot find subdirecroty from " . $return_value_tar->[0];
     my $dir = $1;
     chdir ($dir);
     foreach my $command(@commands)
     {
-        system_or_die($command);
+        system_or_confess($command);
     }
     chdir ('..');
-    system_or_die("rm -rf $dir");
+    system_or_confess("rm -rf $dir");
 }
 
 # Find the file
@@ -451,7 +446,7 @@ sub build_something
 sub try_download
 {
     my ($file,$dest)=@_;
-    # Recherche de l'entrée de %tar_to_url qui corresponde (regexp)
+    # Find the entry from %tar_to_url matching (regexp)
     my $url;
     my $found=0;
     while (my ($regexp,$subref)=each %tar_to_url)
@@ -460,18 +455,18 @@ sub try_download
        $found=1;
        $url=&{$subref}($file);
     }
-    die "Impossible de trouver l'URL de $file" unless ($found);
+    confess "Cannof find ${file}'s URL" unless ($found);
     mkdir("$work_dir/$dest");
-    print "Téléchargement de $file : wget -c $url -O $work_dir/$dest/$file\n";
+    print "Downloading $file : wget -c $url -O $work_dir/$dest/$file\n";
     system("wget -c $url -O $work_dir/$dest/$file");
     unless ($? >>8 == 0)
     {
         move ("$work_dir/$dest/$file","$work_dir/$dest/$file.failed");
-        die "Cannot download $file";
+        confess "Cannot download $file";
     }
 }
 
-# Génération d'un doxygen. À partir d'un fichier Doxyfile qui doit être indiqué dans la conf.
+# Build doxygen. From a Doxyfile which must have been set in the configuration
 sub doxy
 {
     my ($version)=@_;
@@ -480,8 +475,8 @@ sub doxy
     my $src_doxy="${dest}/src/";
     my $dest_doxy="${dest}/doxygen/";
     mkdir("${dest_doxy}");
-    open DOXY_IN,$doxy_file or die "Impossible de trouver le fichier de conf doxygen $doxy_file: $!";
-    open DOXY_OUT,"> ${dest_doxy}/Doxyfile" or die "Impossible de créer ${dest_doxy}/Doxyfile: $!";
+    open DOXY_IN,$doxy_file or confess "Cannot find the doxygen <$doxy_file> configuration file: $!";
+    open DOXY_OUT,"> ${dest_doxy}/Doxyfile" or confess "Cannot write to ${dest_doxy}/Doxyfile: $!";
     while (my $line=<DOXY_IN>)
     {
         $line =~ s/\$\$OUT_DIRECTORY\$\$/${dest_doxy}/;
@@ -491,11 +486,11 @@ sub doxy
     }
     close DOXY_OUT;
     close DOXY_IN;
-    # On peut générer le doxygen
+    # We can produce the doxygen
     system("doxygen ${dest_doxy}/Doxyfile");
-    # Maintenant, vu la quantité de fichiers html dans le résultat, on crée une page index.html
-    # à la racine du rep doxy, qui redirige
-    open DOXY_OUT,"> ${dest_doxy}/index.html" or die "impossible de créer ${dest_doxy}/index.html: $!";
+    # Now, as the amount of html resulting files is huge, lets create an index.html file
+    # at the root directory, redirecting
+    open DOXY_OUT,"> ${dest_doxy}/index.html" or confess "impossible de créer ${dest_doxy}/index.html: $!";
     print DOXY_OUT << 'THEEND';
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -510,25 +505,24 @@ THEEND
     close DOXY_OUT;
 }
 
-# Pour celle la, il faut avoir les tar.gz de toutes les libs en dessous, dans la bonne version. C'est
-# basique pour le moment, mais on fait peu de postgis, donc pas eu envie de m'emmerder :)
+# Build Postgis
 sub build_postgis
 {
     my ($tobuild)=@_;
-    # Test que le LD_LIBRARY_PATH est bon avant d'aller plus loin
-    # Si la personne l'a positionné elle même, c'est pour ses pieds :)
+    # Let's check the LD_LIBRARY_PATH is ok before going somewhere
+    # If someone has already set proj in the LD_LIBRARY_PATH, too bad for him
     unless ((defined $ENV{LD_LIBRARY_PATH} and $ENV{LD_LIBRARY_PATH} =~ /proj/) or defined $LD_LIBRARY_PATH)
     {
-        die "Il faut que le LD_LIBRARY_PATH soit positionné. Lancez ce script en mode env, et importez les variables\n";
+        confess "The LD_LIBRARY_PATH  must be set. Start this scrip in env mode and import the variables\n";
     }
-    my ($majeur1,$majeur2)=majeur_mineur($tobuild);
-    my $majeur=$majeur1 . '.' . $majeur2;
-    unless (defined $postgis_version{$majeur})
+    my ($major1,$major2)=major_minor($tobuild);
+    my $major=$major1 . '.' . $major2;
+    unless (defined $postgis_version{$major})
     {
-        die "Impossible de déterminer les versions de postgis à utiliser pour la version postgres $majeur";
+        confess "Cannot determine the correct Postgis versions to be used with postgres $major";
     }
-    no warnings; # Il va y avoir de l'undef ci-dessous
-    my $refversion=$postgis_version{$majeur};
+    no warnings; # Lots of the following values will be undef
+    my $refversion=$postgis_version{$major};
     my $geos=$refversion->{'geos'};
     my $proj=$refversion->{'proj'};
     my $jsonc=$refversion->{'jsonc'};
@@ -540,7 +534,7 @@ sub build_postgis
     {
         mkdir($postgisdir);
     }
-    chdir($postgisdir) or die "Ne peux pas entrer dans $postgisdir\n";
+    chdir($postgisdir) or confess "Cannot chdir into $postgisdir\n";
     system("rm -rf $geos $proj $postgis $jsonc $gdal");
 
     use warnings;
@@ -548,16 +542,16 @@ sub build_postgis
     my $dest=dest_dir($tobuild);
 
     my $postgis_options='';
-    # On va modifier le PATH au fur et à mesure de la compil: les vieilles versions de postgis ne prenaient pas les chemins dans le configure
+    # We will update PATH during the compilation: old Postgis versions didn't accept paths in the configure
     if (defined $geos)
     {
-        build_something("${geos}.tar.bz2","./configure --prefix=${dest}/geos","make -j $parallelisme","make install");
+        build_something("${geos}.tar.bz2","./configure --prefix=${dest}/geos","make -j $parallelism","make install");
         $postgis_options.=" --with-geosconfig=${dest}/geos/bin/geos-config";
         $ENV{PATH}="${dest}/geos/bin/" . ':' . $ENV{PATH};
     }
     if (defined $proj)
     {
-        build_something("${proj}.tar.gz","./configure --prefix=${dest}/proj","make -j $parallelisme","make install");
+        build_something("${proj}.tar.gz","./configure --prefix=${dest}/proj","make -j $parallelism","make install");
         $postgis_options.=" --with-projdir=${dest}/proj";
         $ENV{PATH}="${dest}/proj/bin/" . ':' . $ENV{PATH};
     }
@@ -568,19 +562,20 @@ sub build_postgis
     }
     if (defined $gdal)
     {
-        build_something("${gdal}.tar.gz","./configure --prefix=${dest}/gdal","make -j $parallelisme","make install");
+        build_something("${gdal}.tar.gz","./configure --prefix=${dest}/gdal","make -j $parallelism","make install");
         $postgis_options.=" --with-gdalconfig=${dest}/gdal/bin/gdal-config";
     }
-    build_something("${postgis}.tar.gz","./configure $postgis_options --prefix=${dest}/postgis","make -j $parallelisme","make","make install");
-    print "Compilation postgis OK\n";
+    build_something("${postgis}.tar.gz","./configure $postgis_options --prefix=${dest}/postgis","make -j $parallelism","make","make install");
+    print "Postgis compilation OK\n";
 
 }
 
+# List all installed and running versions
 sub list
 {
     my @versions = <$work_dir/postgresql-*/>;
 
-    print "  Instance     Port Esclave?\n";
+    print "  Instance     Port Standby?\n";
     print "-----------------------------\n";
 
     @versions = grep {$_ !~ /^$git_local_repo\/?$/} @versions;
@@ -613,11 +608,11 @@ sub list
 
             if (-f "$inst/recovery.conf")
             {
-                print "Oui";
+                print "Yes";
             }
             else
             {
-                print "Non";
+                print "No";
             }
             print "\n";
             $nb++;
@@ -631,11 +626,12 @@ sub list
     }
 }
 
+# List all available versions in the git repository
 sub list_avail
 {
-    chdir ("$git_local_repo") or die "Il n'y a pas de répertoire $git_local_repo\nClones en un à coup de git clone git://git.postgresql.org/git/postgresql.git";
+    chdir ("$git_local_repo") or confess "There is no $git_local_repo directory\nClone one with git clone git://git.postgresql.org/git/postgresql.git";
     my @versions=`git tag`;
-    my @retour;
+    my @return_value;
 
     foreach my $version(@versions)
     {
@@ -644,94 +640,97 @@ sub list_avail
         next if ($version =~ /RC|BETA|ALPHA/);
         $version =~ s/^REL//g;
         $version =~ s/_/./g;
-        # à partir de la 10, c'est REL_10_1 et plus REL9_6_5, donc on se
-        # retrouve avec un point au debut… à virer
+        # Since version 10, this is REL_10_1 and not REL9_6_5, so we get an initial dot
+        # Let's remove it
         $version =~ s/^\.//;
-        push @retour, ($version)
+        push @return_value, ($version)
     }
-    return(\@retour);
+    return(\@return_value);
 }
 
+# List all latest versions per branch
 sub ls_latest
 {
     my $refversions=list_avail();
     my $prevversion='';
-    my $prevmajeur='';
-    my @retour;
+    my $prevmajor='';
+    my @return_value;
     foreach my $version(sort {compare_versions($a,$b) } @$refversions)
     {
-        my ($majeur1,$majeur2)=majeur_mineur($version);
-        my $majeur="$majeur1.$majeur2";
-        if ($prevmajeur and ($majeur ne $prevmajeur))
+        my ($major1,$major2)=major_minor($version);
+        my $major="$major1.$major2";
+        if ($prevmajor and ($major ne $prevmajor))
         {
-            push @retour, ($prevversion);
+            push @return_value, ($prevversion);
         }
-        $prevmajeur=$majeur;
+        $prevmajor=$major;
         $prevversion=$version;
     }
-    push @retour, ($prevversion);
-    return(\@retour);
+    push @return_value, ($prevversion);
+    return(\@return_value);
 }
 
+# Build latest versions, and remove old versions (keeping data)
 sub rebuild_latest
 {
     my @latest=@{ls_latest()};
     foreach my $version(@latest)
     {
-        my $deja_compile=0;
-        my ($majeur1,$majeur2)=majeur_mineur($version);
-        my @olddirs=<$work_dir/postgresql-${majeur1}.${majeur2}*>;
-        # Le nom des olddirs va ressembler à /home/marc/postgres/postgresql-9.3.0
+        my $already_compiled=0;
+        my ($major1,$major2)=major_minor($version);
+        my @olddirs=<$work_dir/postgresql-${major1}.${major2}*>;
+        # olddirs will look like /home/marc/postgres/postgresql-9.3.0
         foreach my $olddir(@olddirs)
         {
             next if ($olddir =~ /dev$/ or $olddir =~ /review$/);
             next unless (-d $olddir);
 
-            $olddir=~ /(\d+\.\d+\.\d+)$/ or die "Nom de dir bizarre: $olddir\n";
+            $olddir=~ /(\d+\.\d+\.\d+)$/ or confess "Weird directory name: $olddir\n";
             my $oldversion=$1;
 
             if (compare_versions($oldversion,$version)==0)
             {
-                print "La version $version est deja compilee.\n";
-                $deja_compile=1;
+                print "The $version is already compiled.\n";
+                $already_compiled=1;
             }
             else
             {
-                print "Suppression de la version obsolete $oldversion. (sauf rep data)\n";
-                # on conserve les répertoire $PGDATA cependant
+                print "Removal of the obsolet $oldversion version. (data directory kept)\n";
                 clean($oldversion, 0);
             }
         }
 
-        # Seulement les versions >= $min_version (versions supportées)
-        unless ($deja_compile or compare_versions($version,$min_version)==-1)
+        # Only versions over $min_version (to not compile very old versions)
+        unless ($already_compiled or compare_versions($version,$min_version)==-1)
         {
-            print "Compilation de $version.\n";
+            print "Building $version.\n";
             build($version);
         }
     }
 }
 
+# Remove a version (and optionnaly the data directory)
 sub clean
 {
     my ($version, $remove_data)=@_;
     $remove_data = 0 if not defined $remove_data;
     my $dest=dest_dir($version);
     croak unless (defined $dest and $dest ne '');
-    stop_all_clusters($version,'immediate'); # Si ça ne réussit pas, tant pis
+    stop_all_clusters($version,'immediate'); # If this fails, too bad
     if ($remove_data) {
-        # on supprime tout le répertoire, y compris les données
-        system_or_die("rm -rf $dest");
+        # we remove everything, including data
+        system_or_confess("rm -rf $dest");
     } else {
-        # si le répertoire n'existe pas (premier build), rien à faire
+        # if the directory doesn't exist, no need to go further
         return if (not -d $dest);
-        # on conserve les données
-        system_or_die("find $dest -mindepth 1 -maxdepth 1 -type d -path '*data*' -prune -o -exec rm -rf {} \\;");
-        # Si le répertoire est vide, on le vire quand même
+        # we keep data
+        system_or_confess("find $dest -mindepth 1 -maxdepth 1 -type d -path '*data*' -prune -o -exec rm -rf {} \\;");
+        # If the directory is empty, let's revome it (it will fail if not)
         rmdir($dest);
     }
 }
 
+# does a cluster exist ?
 sub cluster_exists
 {
     my ($version, $clusterid) = @_;
@@ -741,20 +740,19 @@ sub cluster_exists
     return 0 if (not -d $pgdata);
     return 1;
 }
-#
-# Cette fonction créé un nouvel esclave à partir d'un cluster existant.
-# Un recovery.conf sera automatiquement généré avec une connexion en SR.
+# This function builds a new standby server from an existing cluster.
+# A recovery.conf file will be automatically generated with a SR connection.
 # Les version 8.4- ne sont pas supportées.
-sub add_slave
+sub add_standby
 {
     my ($version, $clusterid) = @_;
 
     if (compare_versions($version, '9.0') == -1)
     {
-    die "Seuls les esclaves en S/R sont supportés.";
+    confess "Only Streaming Replication is supported";
     }
 
-    die "L'instance $version/$clusterid n'existe pas !" if not cluster_exists($version, $clusterid);
+    confess "The $version/$clusterid cluster doesn't exist !" if not cluster_exists($version, $clusterid);
 
     my $newclusterid = $clusterid;
     my $ok = 0;
@@ -763,59 +761,58 @@ sub add_slave
         $newclusterid++;
         $ok = 1 if (not cluster_exists($version, $newclusterid));
     }
-    print "L'esclave sera $version/$newclusterid\n";
+    print "The standby will be $version/$newclusterid\n";
 
-    # Arrêt du serveur source
+    # Stop the source cluster
     stop_one_cluster($version,$clusterid);
 
-    print "Copie des données...\n";
+    print "Copying data...\n";
     my $dir = dest_dir($version);
     my $pgdata_src = get_pgdata($dir,$clusterid);
     my $pgdata_dst = get_pgdata($dir,$newclusterid);
     my $pgport = get_pgport($version, $clusterid);
-    system_or_die("cp -R $pgdata_src $pgdata_dst");
+    system_or_confess("cp -R $pgdata_src $pgdata_dst");
     if (compare_versions($version, '10.0') > 0) {
-        system_or_die("find $pgdata_dst/pg_wal/ -type f -delete");
+        system_or_confess("find $pgdata_dst/pg_wal/ -type f -delete");
     } else {
-        system_or_die("find $pgdata_dst/pg_xlog/ -type f -delete");
+        system_or_confess("find $pgdata_dst/pg_xlog/ -type f -delete");
     }
 
-    print "Génération du recovery.conf\n";
+    print "Produce a recovery.conf\n";
     my $recovery = "$pgdata_dst/recovery.conf";
-    open RECOVERY_CONF, "> $recovery" or die "Impossible de créer $recovery: $!";
+    open RECOVERY_CONF, "> $recovery" or confess "Cannot create $recovery: $!";
     print RECOVERY_CONF "standby_mode = 'on'\n";
     print RECOVERY_CONF "primary_conninfo = 'host=127.0.0.1 port=$pgport application_name=\"$version/$newclusterid\"'\n";
     close RECOVERY_CONF;
 
-    print "Esclave $version/$newclusterid prêt !"
+    print "$version/$newclusterid standby ready !"
 }
 
-#
-# Cette fonction ne fait qu'afficher le shell à exécuter
-# On ne peut évidemment pas modifier l'environnement du shell appelant directement en perl
-# Elle doit être appelée par le shell avec un ` `
+# This displays the shell commands to run
+# It cannot change the calling shell's environment by itsel, so it has to
+# be run from shell with backticks (or equivalent)
 sub env
 {
     unless ($version)
     {
-        print STDERR "Hé, j'ai besoin d'un numero de version\n";
+        print STDERR "I need a version number\n";
         usage();
     }
     if (not defined $clusterid)
     {
-        print STDERR "Hé, j'ai besoin d'un numero de cluster\n";
+        print STDERR "I need a cluster number\n";
         usage();
     }
 
-    # on retourne une erreur ici si le numéro de version n'est pas reconnu
+    # We return an error if the version number is not recognized
     unless ($version =~ /^(((\d+)\.(\d+)\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev))?)|(([0-9][0-9])\.(?:(\d+)|(alpha|beta|rc)(\d+)|(dev|stable))?)|(dev|review))$/)
-    #                      ^ version sur 3 digit                                 ^ version sur 2 digit (après la 10)                   ^ master
+    #                      ^ 3 digit version number                              ^ 2 digit version number (after 10)                         ^ master
     {
-        print STDERR "Version incompréhensible: <$version>\n";
+        print STDERR "Cannot understand: <$version>\n";
         usage();
     }
 
-    # On nettoie le path des anciennes versions, au cas où
+    # We cleanup the path from old versions, just in case
     my $oldpath=$ENV{PATH};
     $oldpath =~ s/${work_dir}.*?\/bin://g;
 
@@ -830,7 +827,8 @@ sub env
     print "fi\n";
     my $ld_library_path;
 
-    # Pour LD_LIBRARY_PATH: on garde ce qu'on a, et on ajoute soit la valeur par défaut, soit ce que l'utilisateur a en place dans la conf
+    # For LD_LIBRARY_PATH: we keep what we have and either add the default
+    # value or what the user has put in place in the configuration
     if (defined $LD_LIBRARY_PATH)
     {
         $ld_library_path=$LD_LIBRARY_PATH;
@@ -848,25 +846,26 @@ sub env
 
     print "export pgversion=$version\n";
     print "export pgclusterid=$clusterid\n";
-    # Génération d'un numéro de port à partir d'un hash de la version et du n° de cluster
+    # Produce a port number from a hash of the version and cluster number
     my $pgport=get_pgport($version, $clusterid);
     print "export PGPORT=$pgport\n";
 }
 
+# Start the cluster specified with version and clusterid
 sub start_one_cluster
 {
     my ($version,$clusterid)=@_;
     my $dir=dest_dir($version);
     $ENV{LANG}="en_GB.utf8";
-    print "Démarrage du cluster $version/$clusterid...\n";
+    print "Starting $version/$clusterid...\n";
     unless (-f "$dir/bin/pg_ctl")
     {
-        die "Pas de binaire $dir/bin/pg_ctl\n";
+        confess "No $dir/bin/pg_ctl binary\n";
     }
     my $pgdata=get_pgdata($dir,$clusterid);
     $ENV{PGDATA}=$pgdata;
     my $args;
-    if (compare_versions($version,'8.2')==-1) # Plus vieille qu'une 8.2
+    if (compare_versions($version,'8.2')==-1) # Order than 8.2
     {
         $args="-c wal_sync_method=fdatasync -c sort_mem=32000 -c vacuum_mem=32000 -c checkpoint_segments=${checkpoint_segments}";
     }
@@ -884,21 +883,22 @@ sub start_one_cluster
     }
     if (! -d $pgdata)
     { # Création du cluster
-        system_or_die("$dir/bin/initdb");
-        system_or_die("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
-        system_or_die("$dir/bin/createdb"); # Pour avoir une base du nom du dba (/me grosse feignasse)
-        system_or_die("openssl req -new -text -out $pgdata/server.req -subj '/C=US/ST=New-York/L=New-York/O=OrgName/OU=IT Department/CN=example.com' -passout pass:toto");
-        system_or_die("openssl rsa -in privkey.pem -out $pgdata/server.key -passin pass:toto");
+        system_or_confess("$dir/bin/initdb");
+        system_or_confess("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
+        system_or_confess("$dir/bin/createdb"); # To get a database with the dba's name (I'm lazy)
+        system_or_confess("openssl req -new -text -out $pgdata/server.req -subj '/C=US/ST=New-York/L=New-York/O=OrgName/OU=IT Department/CN=example.com' -passout pass:toto");
+        system_or_confess("openssl rsa -in privkey.pem -out $pgdata/server.key -passin pass:toto");
         unlink ("privkey.pem");
-        system_or_die("openssl req -x509 -in $pgdata/server.req -text -key $pgdata/server.key -out $pgdata/server.crt");
-        system_or_die("chmod og-rwx $pgdata/server.key");
+        system_or_confess("openssl req -x509 -in $pgdata/server.req -text -key $pgdata/server.key -out $pgdata/server.crt");
+        system_or_confess("chmod og-rwx $pgdata/server.key");
     }
     else
     {
-        system_or_die("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
+        system_or_confess("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
     }
 }
 
+# Start all available clusters on the machine
 sub start_all_clusters
 {
     my ($version) = @_;
@@ -918,6 +918,7 @@ sub start_all_clusters
     closedir $dh;
 }
 
+# Stop one cluster
 sub stop_one_cluster
 {
     my ($version,$clusterid,$mode)=@_;
@@ -927,12 +928,13 @@ sub stop_one_cluster
     }
     my $dir=dest_dir($version);
     my $pgdata=get_pgdata($dir, $clusterid);
-    print "Arrêt de l'instance $version/$clusterid...\n";
-    return 1 unless (-e "$pgdata/postmaster.pid"); #pg_ctl aime pas qu'on lui demande d'éteindre une instance éteinte
+    print "Stopping $version/$clusterid...\n";
+    return 1 unless (-e "$pgdata/postmaster.pid"); #pg_ctl doesn't like being told to shut down an already shut down cluster
     $ENV{PGDATA}=$pgdata;
     system("$dir/bin/pg_ctl -w -m $mode stop");
 }
 
+# Stop all available clusters
 sub stop_all_clusters
 {
     my ($version,$mode)=@_;
@@ -954,20 +956,19 @@ sub stop_all_clusters
 
 sub git_update
 {
-    system_or_die ("cd ${git_local_repo} && git pull");
+    system_or_confess ("cd ${git_local_repo} && git pull");
 }
 
-# La conf est dans un fichier à la .ini. Normalement /usr/local/etc/postgres_manage.conf,
-# ou ~/.postgres_manage.conf ou pointée par la variable d'env
-# postgres_manage, et sinon, passée en ligne de commande. Les priorités sont évidemment ligne de commande avant environnement
-# avant rep par défaut
+# Configuration is in a .ini like file. It will usually be in /usr/local/etc/postgres_manage.conf,
+# ~/.postgres_manage.conf or where the postgres_manage environment variable will tell us, or
+# specified on the command line. Priority is command line > environment > default > global
 
-sub charge_conf
+sub load_configuration
 {
-    # On détecte l'endroit d'où lire la conf:
+    # Where is the configuration ?
     unless (defined $conf_file)
     {
-        # Pas de fichier en ligne de commande. On regarde l'environnement
+        # No command line argument. Let's look at environment...
         if (defined $ENV{postgres_manage})
         {
             $conf_file=$ENV{postgres_manage};
@@ -990,52 +991,56 @@ sub charge_conf
 
     unless (defined $conf_file)
     {
-        die "Pas de fichier de configuration trouvé, ni passé en ligne de commande (-conf), ni dans \$postgres_manage,\nni dans " . $ENV{HOME} . "/.postgres_manage.conf, ni dans /usr/local/etc/.postgres_manage.conf\n";
+        confess "No configuration file found, neither in command line (-conf), nor in \$postgres_manage,\nnor in " . $ENV{HOME} . "/.postgres_manage.conf, nor in /usr/local/etc/.postgres_manage.conf\n";
     }
 
-    # On cherche 4 valeurs: parallelisme, work_dir, doxy_file et git_local_repo.
-    open CONF,$conf_file or die "Pas pu ouvrir $conf_file:$!\n";
+    # We look for 4 values: parallelism, work_dir, doxy_file et git_local_repo.
+    # We also accept "parallelisme", for compatibility for a previous all-french version :)
+    open CONF,$conf_file or confess "Pas pu ouvrir $conf_file:$!\n";
     while (my $line=<CONF>)
     {
-        no strict 'refs'; # Pour pouvoir utiliser les références symboliques
+        no strict 'refs'; # So we can use symbolic references
         my $line_orig=$line;
-        $line=~ s/#.*//; # Suppression des commentaires
-        $line =~ s/\s*$//; # suppression des blancs en fin de ligne
-        next if ($line =~ /^$/); # On saute les lignes vides après commentaires
-        $line =~ s/\s*=\s*/=/; # Suppression des blancs autour du =
-        # On peut maintenant traiter le reste avec une expression régulière simple :)
-        $line =~ /(\S+?)=(.*)/ or die "Ligne de conf bizarre: <$line_orig>\n";
+        $line=~ s/#.*//; # Comments removal
+        $line =~ s/\s*$//; # End of line spaces removal
+        $line =~ s/^\s*//; # Start of line spaces removal
+        next if ($line =~ /^$/); # Empty lines removal (after comments removal)
+        $line =~ s/\s*=\s*/=/; # Spaces around = removal
+        # Now the line has been simplified, we can parse it with a simple regex
+        $line =~ /(\S+?)=(.*)/ or confess "Cannot understand <$line_orig> in configuration file\n";
         my $param_name=$1; my $param_value=$2;
-        ${$param_name}=$param_value; # référence symbolique, par paresse.
+        $param_name='parallelism' if ($param_name eq 'parallelisme');
+        ${$param_name}=$param_value; # Symbolic reference use, for simpler code
     }
-    die "Il me manque des paramètres dans la conf" unless (defined $parallelisme and defined $work_dir and defined $git_local_repo and defined $doxy_file);
+    confess "Missing parameters in configuration" unless (defined $parallelism and defined $work_dir and defined $git_local_repo and defined $doxy_file);
     unless (defined $CONFIGOPTS)
     {
-        $CONFIGOPTS='--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug --with-ossp-uuid';#Valeur par défaut
+        $CONFIGOPTS='--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug --with-ossp-uuid';#Default value
     }
     close CONF;
 }
 
+# Usage function
 sub usage
 {
     print STDERR "$_[0]\n" if ($_[0]);
-    print STDERR "$0 -mode MODE [--version x.y.z] [--conf_file chemin_vers_conf] [--tar_mode]\n";
-    print STDERR "MODE peut être:\n";
-    print STDERR "                  env\n";
-    print STDERR "                  build\n";
-    print STDERR "                  build_postgis\n";
-    print STDERR "                  start\n";
-    print STDERR "                  startall\n";
-    print STDERR "                  stop\n";
-    print STDERR "                  stopall\n";
-    print STDERR "                  clean\n";
-    print STDERR "                  slave\n";
-    print STDERR "                  list\n";
-    print STDERR "                  list_avail\n";
-    print STDERR "                  list_latest\n";
-    print STDERR "                  rebuild_latest\n";
-    print STDERR "                  git_update\n";
-    print STDERR "                  doxy\n";
+    print STDERR "$0 -mode MODE [--version x.y.z] [--conf_file path_to_configuration] [--tar_mode]\n";
+    print STDERR "MODE can be :\n";
+    print STDERR "                env\n";
+    print STDERR "                build\n";
+    print STDERR "                build_postgis\n";
+    print STDERR "                start\n";
+    print STDERR "                startall\n";
+    print STDERR "                stop\n";
+    print STDERR "                stopall\n";
+    print STDERR "                clean\n";
+    print STDERR "                standby\n";
+    print STDERR "                list\n";
+    print STDERR "                list_avail\n";
+    print STDERR "                list_latest\n";
+    print STDERR "                rebuild_latest\n";
+    print STDERR "                git_update\n";
+    print STDERR "                doxy\n";
     exit 1;
 }
 
@@ -1066,22 +1071,21 @@ if (not defined $version and (not defined $mode or $mode !~ /list|rebuild_latest
     }
 }
 
-# par défaut, on est sur le cluster 0
+# by default, we use cluster 0
 $clusterid = '0' if not defined($clusterid);
-# Si le numéro de version contient un numéro de cluster, on le gère
+# If the version number contains a cluster number we get it
 if (defined $version and $version =~ /^(.+)\/(\d+)$/)
 {
     $version = $1;
     $clusterid = int($2);
 }
 
-charge_conf();
+load_configuration();
 setenv();
 
-# Bon j'aurais pu jouer avec des pointeurs sur fonction. Mais j'ai la flemme
 if (not defined $mode)
 {
-    usage("Il me faut un mode d'execution: option -mode, valeurs: env,....\n");
+    usage("We need an execution mode: -mode env for instance...\n");
 }
 elsif ($mode eq 'env')
 {
@@ -1113,12 +1117,12 @@ elsif ($mode eq 'stopall')
 }
 elsif ($mode eq 'clean')
 {
-    # on supprime aussi les données
+    # we also clean data
     clean($version, 1);
 }
-elsif ($mode eq 'slave')
+elsif ($mode eq 'standby')
 {
-    add_slave($version, $clusterid);
+    add_standby($version, $clusterid);
 }
 elsif ($mode eq 'list')
 {
@@ -1146,5 +1150,5 @@ elsif ($mode eq 'doxy')
 }
 else
 {
-    usage("Mode $mode inconnu\n");
+    usage("Unknown mode \"$mode\"\n");
 }
