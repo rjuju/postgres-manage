@@ -88,6 +88,10 @@ my %postgis_version=(
     },
 );
 
+# New configopts per version
+my %new_configopts_per_version=(
+        'dev' => ['--with-llvm']);
+
 # The following has is used to get a correspondance between a regex on a filename
 # to be downloaded and its URL. The anonymous blocks are intended to be short
 # If this gets nasty, we'll return a candidate list of URLs and test them,
@@ -369,6 +373,26 @@ sub setenv
     }
 }
 
+# Remove configopts that are not present in this version
+sub cleanup_configopts
+{
+        my ($config,$version)=@_;
+        foreach my $paramversion(keys (%new_configopts_per_version))
+        {
+                if (compare_versions($version,$paramversion)==-1)
+                {
+                        # This version is older than paramversion, so we remove these options
+                        my @to_remove=@{$new_configopts_per_version{$paramversion}};
+                        foreach my $param (@to_remove)
+                        {
+                                print "Removing incompatible param $param from configure options\n";
+                                $config=~ s/$param//;
+                        }
+                }
+        }
+        return $config;
+}
+
 # Build a PostgreSQL version
 sub build
 {
@@ -413,6 +437,10 @@ sub build
     }
     special_case_compile($tobuild);
     print "./configure $configopt\n";
+
+    # Cleanup the CONFIGOPTS depending on the version
+    $configopt=cleanup_configopts($configopt,$version);
+
     system_or_confess("./configure $configopt");
     if ($make_check)
     {
