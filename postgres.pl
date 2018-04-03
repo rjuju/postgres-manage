@@ -90,7 +90,12 @@ my %postgis_version=(
 
 # New configopts per version
 my %new_configopts_per_version=(
+        '11' => ['--with-llvm'],
         'dev' => ['--with-llvm']);
+
+# No idea what version it could be, but lets's do this right now
+my %deprecated_configopts_per_version=(
+        );
 
 # The following has is used to get a correspondance between a regex on a filename
 # to be downloaded and its URL. The anonymous blocks are intended to be short
@@ -382,6 +387,19 @@ sub cleanup_configopts
                 if (compare_versions($version,$paramversion)==-1)
                 {
                         # This version is older than paramversion, so we remove these options
+                        my @to_remove=@{$new_configopts_per_version{$paramversion}};
+                        foreach my $param (@to_remove)
+                        {
+                                print "Removing incompatible param $param from configure options\n";
+                                $config=~ s/$param//;
+                        }
+                }
+        }
+        foreach my $paramversion(keys (%deprecated_configopts_per_version))
+        {
+                if (compare_versions($version,$paramversion)==1)
+                {
+                        # This version is newer than paramversion, so we remove these options
                         my @to_remove=@{$new_configopts_per_version{$paramversion}};
                         foreach my $param (@to_remove)
                         {
