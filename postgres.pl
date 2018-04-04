@@ -400,7 +400,7 @@ sub cleanup_configopts
                 if (compare_versions($version,$paramversion)==1)
                 {
                         # This version is newer than paramversion, so we remove these options
-                        my @to_remove=@{$new_configopts_per_version{$paramversion}};
+                        my @to_remove=@{$deprecated_configopts_per_version{$paramversion}};
                         foreach my $param (@to_remove)
                         {
                                 print "Removing incompatible param $param from configure options\n";
