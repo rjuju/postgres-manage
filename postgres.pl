@@ -95,7 +95,8 @@ my %new_configopts_per_version=(
 
 # No idea what version it could be, but lets's do this right now
 my %deprecated_configopts_per_version=(
-        );
+        '11' => ['--with-wal-segsize'],
+        'dev' => ['--with-wal-segsize']);
 
 # The following has is used to get a correspondance between a regex on a filename
 # to be downloaded and its URL. The anonymous blocks are intended to be short
@@ -391,7 +392,7 @@ sub cleanup_configopts
                         foreach my $param (@to_remove)
                         {
                                 print "Removing incompatible param $param from configure options\n";
-                                $config=~ s/$param//;
+                                $config=~ s/$param(=\S+)?//;
                         }
                 }
         }
@@ -404,7 +405,7 @@ sub cleanup_configopts
                         foreach my $param (@to_remove)
                         {
                                 print "Removing incompatible param $param from configure options\n";
-                                $config=~ s/$param//;
+                                $config=~ s/$param(=\S+)?//;
                         }
                 }
         }
