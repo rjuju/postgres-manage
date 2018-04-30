@@ -90,12 +90,12 @@ my %postgis_version=(
 
 # New configopts per version
 my %new_configopts_per_version=(
-        '11' => ['--with-llvm'],
+        '11.0' => ['--with-llvm'],
         'dev' => ['--with-llvm']);
 
 # No idea what version it could be, but lets's do this right now
 my %deprecated_configopts_per_version=(
-        '11' => ['--with-wal-segsize'],
+        '11.0' => ['--with-wal-segsize'],
         'dev' => ['--with-wal-segsize']);
 
 # The following has is used to get a correspondance between a regex on a filename
