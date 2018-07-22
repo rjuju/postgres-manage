@@ -382,34 +382,34 @@ sub setenv
 # Remove configopts that are not present in this version
 sub cleanup_configopts
 {
-        my ($config,$version)=@_;
-        foreach my $paramversion(keys (%new_configopts_per_version))
+    my ($config,$version)=@_;
+    foreach my $paramversion(keys (%new_configopts_per_version))
+    {
+        if (compare_versions($version,$paramversion)==-1)
         {
-                if (compare_versions($version,$paramversion)==-1)
-                {
-                        # This version is older than paramversion, so we remove these options
-                        my @to_remove=@{$new_configopts_per_version{$paramversion}};
-                        foreach my $param (@to_remove)
-                        {
-                                print "Removing incompatible param $param from configure options\n";
-                                $config=~ s/$param(=\S+)?//;
-                        }
-                }
+            # This version is older than paramversion, so we remove these options
+            my @to_remove=@{$new_configopts_per_version{$paramversion}};
+            foreach my $param (@to_remove)
+            {
+                print "Removing incompatible param $param from configure options\n";
+                $config=~ s/$param(=\S+)?//;
+            }
         }
-        foreach my $paramversion(keys (%deprecated_configopts_per_version))
+    }
+    foreach my $paramversion(keys (%deprecated_configopts_per_version))
+    {
+        if (compare_versions($version,$paramversion)==1)
         {
-                if (compare_versions($version,$paramversion)==1)
-                {
-                        # This version is newer than paramversion, so we remove these options
-                        my @to_remove=@{$deprecated_configopts_per_version{$paramversion}};
-                        foreach my $param (@to_remove)
-                        {
-                                print "Removing incompatible param $param from configure options\n";
-                                $config=~ s/$param(=\S+)?//;
-                        }
-                }
+            # This version is newer than paramversion, so we remove these options
+            my @to_remove=@{$deprecated_configopts_per_version{$paramversion}};
+            foreach my $param (@to_remove)
+            {
+                print "Removing incompatible param $param from configure options\n";
+                $config=~ s/$param(=\S+)?//;
+            }
         }
-        return $config;
+    }
+    return $config;
 }
 
 # Build a PostgreSQL version
