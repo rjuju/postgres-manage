@@ -153,9 +153,9 @@ sub major_minor
     }
     else
     {
-        $version =~ /^(\d+)\.(\d+|dev)$/
+        $version =~ /^(\d+)\.((alpha|beta|rc])?(\d+|dev))$/
             or croak "Weird version $version in major_minor\n";
-        return ($1,$2);
+        return ($1, 0, $2);
     }
 }
 
@@ -334,7 +334,7 @@ sub dest_dir
     } elsif ($major1 < 10){
         $versiondir="$major1.$major2.$minor";
     } else {
-        $versiondir="$major1.$major2";
+        $versiondir="$major1.$minor";
     }
 
     return("${work_dir}/postgresql-${versiondir}");
