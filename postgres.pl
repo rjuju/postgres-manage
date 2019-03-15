@@ -931,9 +931,9 @@ sub start_one_cluster
         system_or_confess("$dir/bin/initdb");
         system_or_confess("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
         system_or_confess("$dir/bin/createdb"); # To get a database with the dba's name (I'm lazy)
-        system_or_confess("openssl req -new -text -out $pgdata/server.req -subj '/C=US/ST=New-York/L=New-York/O=OrgName/OU=IT Department/CN=example.com' -passout pass:toto");
-        system_or_confess("openssl rsa -in privkey.pem -out $pgdata/server.key -passin pass:toto");
-        unlink ("privkey.pem");
+        system_or_confess("openssl req -new -text -out $pgdata/server.req -keyout $pgdata/privkey.pem -subj '/C=US/ST=New-York/L=New-York/O=OrgName/OU=IT Department/CN=example.com' -passout pass:toto");
+        system_or_confess("openssl rsa -in $pgdata/privkey.pem -out $pgdata/server.key -passin pass:toto");
+        unlink ("$pgdata/privkey.pem");
         system_or_confess("openssl req -x509 -in $pgdata/server.req -text -key $pgdata/server.key -out $pgdata/server.crt");
         system_or_confess("chmod og-rwx $pgdata/server.key");
     }
