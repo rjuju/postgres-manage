@@ -1,7 +1,7 @@
 parallelisme=6
-work_dir=/home/marc/postgres
-git_local_repo=/home/marc/postgres/postgresql-git
-doxy_file=/home/marc/postgres/Doxyfile
+work_dir=/home/user/postgres
+git_local_repo=/home/user/postgres/postgresql-git
+doxy_file=/home/user/postgres/Doxyfile
 min_version=9.1 # Version minimum pour laquelle compiler
 # if you don't want to run the regression tests
 # make_check=0
@@ -12,7 +12,9 @@ min_version=9.1 # Version minimum pour laquelle compiler
 # If you don't want the default build environment
 # CC=
 # CFLAGS=
+# If it needs to be overridden
+# PKG_CONFIG_PATH=/usr/local/opt/icu4c/lib/pkgconfig
 # Default CONFIGOPTS
 # CONFIGOPTS=--enable-thread-safety --with-openssl --with-libxml --enable-nls --enable-debug
-# LD_LIBRARY_PATH en dur à utiliser à la place de celui par défaut.
-LD_LIBRARY_PATH=pouet
+# hardcoded LD_LIBRARY_PATH to use instead of the default one.
+# LD_LIBRARY_PATH=pouet

@@ -24,6 +24,7 @@ our $max_wal_size="1500MB";
 our $CONFIGOPTS; # Do not mistake for $configopt (the command line that will be
                  # passed to configure
 our $LD_LIBRARY_PATH;
+our $PKG_CONFIG_PATH;
 
 our $help=0;
 our $tar_mode=0; # Should we compile from git or a tar ? (useful when the flex/bison
@@ -415,6 +416,7 @@ sub build
 {
     my ($tobuild)=@_;
     my $dest=dest_dir($tobuild);
+    my $config_bin="./configure";
     # Build the configure command line
     $configopt="--prefix=$dest $CONFIGOPTS";
     my $tag=version_to_REL($tobuild);
@@ -453,12 +455,16 @@ sub build
         chdir "${dest}/src" or confess "Cannot chdir ${dest}/src : $!\n";
     }
     special_case_compile($tobuild);
-    print "./configure $configopt\n";
+    if (defined $PKG_CONFIG_PATH)
+    {
+        $config_bin = "PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\" $config_bin";
+    }
+    print "$config_bin $configopt\n";
 
     # Cleanup the CONFIGOPTS depending on the version
     $configopt=cleanup_configopts($configopt,$version);
 
-    system_or_confess("./configure $configopt");
+    system_or_confess("$config_bin $configopt");
     if ($make_check)
     {
         $check = " && make check ";
