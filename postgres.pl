@@ -791,16 +791,16 @@ sub cluster_exists
     return 0 if (not -d $pgdata);
     return 1;
 }
-# This function builds a new standby server from an existing cluster.
-# A recovery.conf file will be automatically generated with a SR connection.
-# Les version 8.4- ne sont pas supportées.
+# This function builds a new standby server from an existing cluster.  Required
+# configuration will be automatically generated, using a SR connection.
+# Versions 8.4 and below aren't supported.
 sub add_standby
 {
     my ($version, $clusterid) = @_;
 
     if (compare_versions($version, '9.0') == -1)
     {
-    confess "Only Streaming Replication is supported";
+        confess "Only Streaming Replication is supported";
     }
 
     confess "The $version/$clusterid cluster doesn't exist !" if not cluster_exists($version, $clusterid);
@@ -814,27 +814,41 @@ sub add_standby
     }
     print "The standby will be $version/$newclusterid\n";
 
-    # Stop the source cluster
-    stop_one_cluster($version,$clusterid);
+    my $new_api = (compare_versions($version, '12.0') >= 0);
 
-    print "Copying data...\n";
     my $dir = dest_dir($version);
-    my $pgdata_src = get_pgdata($dir,$clusterid);
-    my $pgdata_dst = get_pgdata($dir,$newclusterid);
+    my $pgdata_dst = get_pgdata($dir, $newclusterid);
     my $pgport = get_pgport($version, $clusterid);
-    system_or_confess("cp -R $pgdata_src $pgdata_dst");
-    if (compare_versions($version, '10.0') > 0) {
-        system_or_confess("find $pgdata_dst/pg_wal/ -type f -delete");
-    } else {
-        system_or_confess("find $pgdata_dst/pg_xlog/ -type f -delete");
-    }
 
-    print "Produce a recovery.conf\n";
-    my $recovery = "$pgdata_dst/recovery.conf";
-    open RECOVERY_CONF, "> $recovery" or confess "Cannot create $recovery: $!";
-    print RECOVERY_CONF "standby_mode = 'on'\n";
-    print RECOVERY_CONF "primary_conninfo = 'host=127.0.0.1 port=$pgport application_name=\"$version/$newclusterid\"'\n";
-    close RECOVERY_CONF;
+    if ($new_api)
+    {
+        print "Executing pg_basebackup...\n";
+        system_or_confess("pg_basebackup -c fast -X stream -R"
+            . " -d 'host=127.0.0.1 port=$pgport application_name=\"$version/$newclusterid\"'"
+            . " -D $pgdata_dst");
+        my $pgconf = "$pgdata_dst/postgresql.conf";
+    }
+    else
+    {
+        my $pgdata_src = get_pgdata($dir,$clusterid);
+
+        # Stop the source cluster
+        stop_one_cluster($version,$clusterid);
+
+        print "Copying data...\n";
+        system_or_confess("cp -R $pgdata_src $pgdata_dst");
+        if (compare_versions($version, '10.0') > 0) {
+            system_or_confess("find $pgdata_dst/pg_wal/ -type f -delete");
+        } else {
+            system_or_confess("find $pgdata_dst/pg_xlog/ -type f -delete");
+        }
+        print "Produce a recovery.conf\n";
+        my $recovery = "$pgdata_dst/recovery.conf";
+        open RECOVERY_CONF, "> $recovery" or confess "Cannot create $recovery: $!";
+        print RECOVERY_CONF "standby_mode = 'on'\n" if (!$new_api);
+        print RECOVERY_CONF "primary_conninfo = 'host=127.0.0.1 port=$pgport application_name=\"$version/$newclusterid\"'\n";
+        close RECOVERY_CONF;
+    }
 
     print "$version/$newclusterid standby ready !"
 }
