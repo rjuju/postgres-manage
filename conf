@@ -1,4 +1,4 @@
-parallelisme=6
+parallelism=6
 work_dir=/home/user/postgres
 git_local_repo=/home/user/postgres/postgresql-git
 doxy_file=/home/user/postgres/Doxyfile
