@@ -462,7 +462,7 @@ sub build
     print "$config_bin $configopt\n";
 
     # Cleanup the CONFIGOPTS depending on the version
-    $configopt=cleanup_configopts($configopt,$version);
+    $configopt=cleanup_configopts($configopt,$tobuild);
 
     system_or_confess("$config_bin $configopt");
     if ($make_check)
