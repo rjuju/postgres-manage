@@ -729,14 +729,23 @@ sub rebuild_latest
     {
         my $already_compiled=0;
         my ($major1,$major2)=major_minor($version);
-        my @olddirs=<$work_dir/postgresql-${major1}.${major2}*>;
+        my @olddirs;
+        if ($major2 != 0)
+        {
+            # !0 means that's an old (pre 10) versioning
+            @olddirs=<$work_dir/postgresql-${major1}.${major2}*>;
+        }
+        else
+        {
+            @olddirs=<$work_dir/postgresql-${major1}*>;
+        }
         # olddirs will look like /home/marc/postgres/postgresql-9.3.0
         foreach my $olddir(@olddirs)
         {
             next if ($olddir =~ /dev$/ or $olddir =~ /review$/);
             next unless (-d $olddir);
 
-            $olddir=~ /(\d+\.\d+\.\d+)$/ or confess "Weird directory name: $olddir\n";
+            $olddir=~ /(\d+\.\d+(\.\d+)?)$/ or confess "Weird directory name: $olddir\n";
             my $oldversion=$1;
 
             if (compare_versions($oldversion,$version)==0)
