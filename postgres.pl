@@ -467,9 +467,9 @@ sub build
     system_or_confess("$config_bin $configopt");
     if ($make_check)
     {
-        $check = " && make check ";
+        $check = " && make -s check ";
     }
-    system_or_confess("nice -19 make -j${parallelism} $check && make install && cd contrib && make -j3 && make install");
+    system_or_confess("nice -19 make -s -j${parallelism} $check && make -s install && cd contrib && make -s -j3 && make -s install");
 }
 
 # Generic build function. Mostly for postgis and its dependencies
@@ -596,27 +596,27 @@ sub build_postgis
     # We will update PATH during the compilation: old Postgis versions didn't accept paths in the configure
     if (defined $geos)
     {
-        build_something("${geos}.tar.bz2","./configure --prefix=${dest}/geos","make -j $parallelism","make install");
+        build_something("${geos}.tar.bz2","./configure --prefix=${dest}/geos","make -s -j $parallelism","make -s install");
         $postgis_options.=" --with-geosconfig=${dest}/geos/bin/geos-config";
         $ENV{PATH}="${dest}/geos/bin/" . ':' . $ENV{PATH};
     }
     if (defined $proj)
     {
-        build_something("${proj}.tar.gz","./configure --prefix=${dest}/proj","make -j $parallelism","make install");
+        build_something("${proj}.tar.gz","./configure --prefix=${dest}/proj","make -s -j $parallelism","make -s install");
         $postgis_options.=" --with-projdir=${dest}/proj";
         $ENV{PATH}="${dest}/proj/bin/" . ':' . $ENV{PATH};
     }
     if (defined $jsonc)
     {
-        build_something("${jsonc}.tar.gz","./configure --prefix=${dest}/jsonc","make","make install");
+        build_something("${jsonc}.tar.gz","./configure --prefix=${dest}/jsonc","make","make -s install");
         $postgis_options.=" --with-jsondir=${dest}/jsonc";
     }
     if (defined $gdal)
     {
-        build_something("${gdal}.tar.gz","./configure --prefix=${dest}/gdal","make -j $parallelism","make install");
+        build_something("${gdal}.tar.gz","./configure --prefix=${dest}/gdal","make -s -j $parallelism","make -s install");
         $postgis_options.=" --with-gdalconfig=${dest}/gdal/bin/gdal-config";
     }
-    build_something("${postgis}.tar.gz","./configure $postgis_options --prefix=${dest}/postgis","make -j $parallelism","make","make install");
+    build_something("${postgis}.tar.gz","./configure $postgis_options --prefix=${dest}/postgis","make -s -j $parallelism","make","make -s install");
     print "Postgis compilation OK\n";
 
 }
