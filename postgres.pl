@@ -783,9 +783,9 @@ sub clean
     } else {
         # if the directory doesn't exist, no need to go further
         return if (not -d $dest);
-        # we keep data
-        system_or_confess("find $dest -mindepth 1 -maxdepth 1 -type d -path '*data*' -prune -o -exec rm -rf {} \\;");
-        # If the directory is empty, let's revome it (it will fail if not)
+        # we keep data and any file in the top-level directory
+        system_or_confess("find $dest -mindepth 1 -maxdepth 1 -type d \! -name '*data*' -exec rm -rf {} \\;");
+        # If the directory is empty, let's remove it (it will fail if not)
         rmdir($dest);
     }
 }
