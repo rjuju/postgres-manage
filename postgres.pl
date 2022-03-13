@@ -14,7 +14,7 @@ our $git_local_repo;
 our $doxy_file;
 our $CC;
 our $CFLAGS;
-our $CXXFLAGS;
+our $CPPFLAGS;
 our $min_version='9.2';
 our $show_commit=0;
 our $make_check=1;
@@ -375,6 +375,14 @@ sub setenv
     else
     {
         $ENV{CFLAGS}=$CFLAGS;
+    }
+    if (not defined $CPPFLAGS)
+    {
+        undef $ENV{CPPFLAGS};
+    }
+    else
+    {
+        $ENV{CPPFLAGS}=$CPPFLAGS;
     }
 }
 
