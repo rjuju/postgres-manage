@@ -844,6 +844,7 @@ sub add_standby
     {
         print "Executing pg_basebackup...\n";
         system_or_confess("pg_basebackup -c fast -X stream -R"
+            . " --slot standby$newclusterid --create-slot"
             . " -d 'host=127.0.0.1 port=$pgport application_name=\"$version/$newclusterid\"'"
             . " -D $pgdata_dst");
         my $pgconf = "$pgdata_dst/postgresql.conf";
