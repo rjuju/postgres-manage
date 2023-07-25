@@ -29,6 +29,7 @@ our $PKG_CONFIG_PATH;
 our $help=0;
 our $tar_mode=0; # Should we compile from git or a tar ? (useful when the flex/bison
                  # files are no longer compatible with the flex/bison on the machine)
+our $use_slot=0; # Should we use a replication slot for physical replication
 
 my $conf_file;
 
@@ -842,9 +843,16 @@ sub add_standby
 
     if ($new_api)
     {
+        my $slot_cmd = "";
+
+        if ($use_slot)
+        {
+            $slot_cmd = " --slot standby$newclusterid --create-slot";
+        }
+
         print "Executing pg_basebackup...\n";
         system_or_confess("pg_basebackup -c fast -X stream -R"
-            . " --slot standby$newclusterid --create-slot"
+            . $slot_cmd
             . " -d 'host=127.0.0.1 port=$pgport application_name=\"$version/$newclusterid\"'"
             . " -D $pgdata_dst");
         my $pgconf = "$pgdata_dst/postgresql.conf";
@@ -1110,7 +1118,7 @@ sub load_configuration
 sub usage
 {
     print STDERR "$_[0]\n" if ($_[0]);
-    print STDERR "$0 -mode MODE [--version x.y.z] [--conf_file path_to_configuration] [--tar_mode]\n";
+    print STDERR "$0 -mode MODE [--version x.y.z] [--conf_file path_to_configuration] [--tar_mode] [--use_slot]\n";
     print STDERR "MODE can be :\n";
     print STDERR "                env\n";
     print STDERR "                build\n";
@@ -1135,6 +1143,7 @@ GetOptions (
     "mode=s"        => \$mode,
     "conf_file=s"   => \$conf_file,
     "tar_mode"	    => \$tar_mode,
+    "use_slot"      => \$use_slot,
     "help"          => \$help,
 )
 or usage("Error in command line arguments\n");
