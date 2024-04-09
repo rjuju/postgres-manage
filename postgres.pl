@@ -977,7 +977,14 @@ sub start_one_cluster
     }
     if (! -d $pgdata)
     { # Création du cluster
-        system_or_confess("$dir/bin/initdb");
+        my $initdb_arg = "";
+
+        # Automatically enable data checksums for pg 9.3+
+        if (compare_versions($version, "9.3") >= 0)
+        {
+            $initdb_arg = "--data-checksums";
+        }
+        system_or_confess("$dir/bin/initdb $initdb_arg");
         system_or_confess("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
         system_or_confess("$dir/bin/createdb"); # To get a database with the dba's name (I'm lazy)
         system_or_confess("openssl req -new -text -out $pgdata/server.req -keyout $pgdata/privkey.pem -subj '/C=US/ST=New-York/L=New-York/O=OrgName/OU=IT Department/CN=example.com' -passout pass:toto");
