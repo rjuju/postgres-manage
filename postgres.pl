@@ -995,7 +995,7 @@ sub start_one_cluster
     }
     else
     {
-        system_or_confess("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log");
+        system_or_confess("$dir/bin/pg_ctl -w -o '$args' start -l $pgdata/log >> $pgdata/log 2>&1");
     }
 }
 
