@@ -95,6 +95,7 @@ my %new_configopts_per_version=(
         '11.0' => ['--with-llvm'],
         '14.0' => ['--with-lz4'],
         '15.0' => ['--with-zstd'],
+        '18.0' => ['--with-liburing','--with-libnuma']
 );
 
 # No idea what version it could be, but lets's do this right now
